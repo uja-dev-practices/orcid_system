@@ -2,18 +2,13 @@ import httpx
 import os
 from typing import Optional
 
-
 class ORCIDClient:
-    """
-    Cliente para interactuar con la Public API de ORCID.
-    Permite:
-    - Obtener token público
-    - Consultar /record
-    - Consultar /works
-    """
+    
+    TOKEN_URL = "https://sandbox.orcid.org/oauth/token"
+    BASE_URL = "https://pub.sandbox.orcid.org/v3.0"
 
-    TOKEN_URL = "https://orcid.org/oauth/token"
-    BASE_URL = "https://pub.orcid.org/v3.0"
+    # TOKEN_URL = "https://orcid.org/oauth/token"
+    # BASE_URL = "https://pub.orcid.org/v3.0"
 
     def __init__(self):
         self.client_id = os.getenv("ORCID_CLIENT_ID")
