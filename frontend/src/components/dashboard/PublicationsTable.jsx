@@ -59,9 +59,10 @@ export function PublicationsTable({
     const rows = needle
       ? publications.filter(
           (p) =>
-            p.title.toLowerCase().includes(needle) ||
-            p.journal.toLowerCase().includes(needle) ||
-            String(p.publication_year).includes(needle),
+            (p.title ?? "").toLowerCase().includes(needle) ||
+            (p.journal ?? "").toLowerCase().includes(needle) ||
+            String(p.publication_year ?? "").includes(needle) ||
+            (p.doi ?? "").toLowerCase().includes(needle),
         )
       : publications;
     return sortPublications(rows, sortKey, sortDir);
@@ -153,20 +154,26 @@ export function PublicationsTable({
                       {pub.title}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-ink-secondary">
-                      {pub.journal}
+                      {pub.journal || "—"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-ink-primary">
-                      {pub.publication_year}
+                      {pub.publication_year ?? "—"}
                     </td>
                     <td className="px-4 py-3.5">
-                      <a
-                        href={`https://doi.org/${pub.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="whitespace-nowrap font-mono text-xs text-brand-accent hover:underline"
-                      >
-                        {pub.doi}
-                      </a>
+                      {pub.doi ? (
+                        <a
+                          href={`https://doi.org/${pub.doi}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="whitespace-nowrap font-mono text-xs text-brand-accent hover:underline"
+                        >
+                          {pub.doi}
+                        </a>
+                      ) : (
+                        <span className="whitespace-nowrap font-mono text-xs text-ink-tertiary">
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       <Badge type={pub.type} />

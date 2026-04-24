@@ -83,12 +83,25 @@ export function DashboardPage() {
   async function handleSync() {
     setSyncStatus("loading");
     try {
-      const updated = await syncResearcher(orcid);
-      if (updated) setResearcher(updated);
-      await loadPublications();
+      const summary = await syncResearcher(orcid);
+
+      if (summary?.status === "error") {
+        throw new Error(summary.message || "El backend rechazó la sincronización.");
+      }
+
+      // El backend devuelve un resumen del SyncJob, no el researcher.
+      // Refrescamos ambos recursos en paralelo.
+      await Promise.all([loadResearcher(), loadPublications()]);
+
       setSyncStatus("success");
+      const total = summary?.total ?? 0;
+      const nuevos = summary?.new_records ?? 0;
+      const actualizados = summary?.updated_records ?? 0;
       toast.success("Sincronización completada", {
-        description: "Las publicaciones se han actualizado desde ORCID.",
+        description:
+          total > 0
+            ? `${nuevos} nuevas · ${actualizados} actualizadas (${total} total).`
+            : summary?.message ?? "Sin cambios desde la última sincronización.",
       });
       setTimeout(() => setSyncStatus("idle"), SUCCESS_FLASH_MS);
     } catch (err) {

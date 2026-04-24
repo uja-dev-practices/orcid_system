@@ -69,10 +69,14 @@ export async function mockGetPublications(/* orcidId */) {
 
 export async function mockSyncResearcher(orcidId) {
   await delay(1800);
+  // Imita el payload real del backend (resumen del SyncJob, no el researcher).
   return {
-    ...MOCK_RESEARCHER,
-    orcid_id: orcidId,
-    last_sync_at: new Date().toISOString(),
+    status: "ok",
+    message: "Sincronización completada correctamente.",
+    researcher: orcidId,
+    new_records: 0,
+    updated_records: MOCK_PUBLICATIONS.length,
+    total: MOCK_PUBLICATIONS.length,
   };
 }
 
