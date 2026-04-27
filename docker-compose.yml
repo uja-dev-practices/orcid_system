@@ -8,10 +8,10 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/orcid_db
-      ORCID_CLIENT_ID: ${ORCID_CLIENT_ID}
-      ORCID_CLIENT_SECRET: ${ORCID_CLIENT_SECRET}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       - db

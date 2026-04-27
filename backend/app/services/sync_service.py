@@ -1,10 +1,12 @@
 from sqlalchemy.orm import Session
+import httpx
+
 from app.services.orcid_client import ORCIDClient
 from app.services.normalizer import PublicationNormalizer
-from app.repositories.researcher_repository import ResearcherRepository
-from app.repositories.publication_repository import PublicationRepository
-from app.repositories.syncjob_repository import SyncJobRepository
-import httpx
+
+from app.db.repositories.researcher_repository import ResearcherRepository
+from app.db.repositories.publication_repository import PublicationRepository
+from app.db.repositories.syncjob_repository import SyncJobRepository
 
 
 class SyncService:
@@ -16,8 +18,6 @@ class SyncService:
         """
         Sincroniza las publicaciones de un investigador con manejo robusto de errores.
         """
-
-        # 1. Obtener o crear investigador
         try:
             researcher = ResearcherRepository.get_by_orcid(db, orcid_id)
 
@@ -35,14 +35,23 @@ class SyncService:
             if e.response.status_code == 404:
                 return {
                     "status": "error",
-                    "message": f"El ORCID {orcid_id} no existe en Sandbox."
+                    "code": 404,
+                    "message": f"El ORCID {orcid_id} no existe en ORCID."
                 }
-            return {"status": "error", "message": str(e)}
+            return {
+                "status": "error",
+                "code": e.response.status_code,
+                "message": f"Error al consultar ORCID: {str(e)}"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "code": 500,
+                "message": f"Error interno durante la sincronización: {str(e)}"
+            }
 
-        # 2. Crear SyncJob
         job = SyncJobRepository.start_job(db, researcher.id)
 
-        # 3. Obtener works
         try:
             works_raw = self.orcid_client.fetch_works(orcid_id)
         except httpx.HTTPStatusError as e:
@@ -56,19 +65,27 @@ class SyncService:
                     "updated_records": 0,
                     "total": 0
                 }
-            return {"status": "error", "message": str(e)}
+            return {
+                "status": "error",
+                "code": e.response.status_code,
+                "message": f"Error al obtener works de ORCID: {str(e)}"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "code": 500,
+                "message": f"Error interno al obtener works: {str(e)}"
+            }
 
         groups = works_raw.get("group", [])
 
         new_records = 0
         updated_records = 0
 
-        # 4. Procesar works
         for group in groups:
             summary = group["work-summary"][0]
             normalized = PublicationNormalizer.normalize_work(summary)
 
-            # 🔥 AHORA SE DETECTAN DUPLICADOS POR put_code
             existing = PublicationRepository.get_by_put_code(
                 db, researcher.id, normalized["put_code"]
             )
@@ -80,17 +97,40 @@ class SyncService:
                 PublicationRepository.create(db, researcher.id, normalized)
                 new_records += 1
 
-        # 5. Finalizar SyncJob
         SyncJobRepository.finish_job(db, job, new_records, updated_records)
-
-        # 6. Actualizar last_sync_at
         ResearcherRepository.update_last_sync(db, researcher)
 
         return {
             "status": "ok",
             "message": "Sincronización completada correctamente.",
-            "researcher": researcher.orcid_id,
+            "researcher_id": researcher.id,
             "new_records": new_records,
             "updated_records": updated_records,
             "total": new_records + updated_records
+        }
+
+    def sync_and_get_full(self, db: Session, orcid_id: str):
+        """
+        Sincroniza (si es necesario) y devuelve investigador + publicaciones.
+        Pensado para el buscador: una sola petición.
+        """
+        sync_result = self.sync_researcher(db, orcid_id)
+
+        if sync_result.get("status") == "error":
+            return sync_result
+
+        researcher = ResearcherRepository.get_by_orcid(db, orcid_id)
+        if not researcher:
+            return {
+                "status": "error",
+                "code": 500,
+                "message": "Error interno: investigador no encontrado tras sincronización."
+            }
+
+        publications = PublicationRepository.list_by_researcher(db, researcher.id)
+
+        return {
+            "status": "ok",
+            "researcher": researcher,
+            "publications": publications
         }
