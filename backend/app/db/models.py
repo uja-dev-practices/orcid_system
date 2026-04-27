@@ -1,60 +1,63 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from .session import Base
 import uuid
+from datetime import datetime
+
+from app.db.session import Base
 
 
 class Researcher(Base):
     __tablename__ = "researchers"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    orcid_id = Column(String(19), unique=True, nullable=False)
-    name = Column(Text)
+    orcid_id = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=True)
     authenticated = Column(Boolean, default=False)
-    access_token = Column(Text, nullable=True)
-    last_sync_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_sync_at = Column(DateTime, nullable=True)
 
-    publications = relationship(
-        "Publication",
-        back_populates="researcher",
-        cascade="all, delete-orphan"
-    )
-
-    sync_jobs = relationship(
-        "SyncJob",
-        back_populates="researcher",
-        cascade="all, delete-orphan"
-    )
+    publications = relationship("Publication", back_populates="researcher", cascade="all, delete-orphan")
 
 
 class Publication(Base):
     __tablename__ = "publications"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    researcher_id = Column(UUID(as_uuid=True), ForeignKey("researchers.id"))
-    put_code = Column(Integer)
-    title = Column(Text)
-    journal = Column(Text)
-    doi = Column(Text)
-    pub_year = Column(Integer)
-    type = Column(Text)
-    hash_fingerprint = Column(Text)
-    last_modified = Column(DateTime(timezone=True))
 
+    researcher_id = Column(UUID(as_uuid=True), ForeignKey("researchers.id"), nullable=False)
     researcher = relationship("Researcher", back_populates="publications")
 
+    # ORCID core
+    put_code = Column(Integer, index=True, nullable=False)
+    title = Column(String, nullable=True)
+    subtitle = Column(String, nullable=True)
+    type = Column(String, nullable=True)
 
-class SyncJob(Base):
-    __tablename__ = "sync_jobs"
+    # Journal / container
+    journal = Column(String, nullable=True)
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    researcher_id = Column(UUID(as_uuid=True), ForeignKey("researchers.id"))
-    status = Column(String(20))
-    new_records = Column(Integer, default=0)
-    updated_records = Column(Integer, default=0)
-    started_at = Column(DateTime(timezone=True), server_default=func.now())
-    finished_at = Column(DateTime(timezone=True))
+    # Dates
+    pub_year = Column(Integer, nullable=True)
+    pub_month = Column(Integer, nullable=True)
+    pub_day = Column(Integer, nullable=True)
 
-    researcher = relationship("Researcher", back_populates="sync_jobs")
+    # Identifiers / links
+    doi = Column(String, nullable=True)
+    url = Column(String, nullable=True)
+
+    # Description / citation
+    short_description = Column(String, nullable=True)
+    citation_type = Column(String, nullable=True)
+    citation_value = Column(String, nullable=True)
+
+    # Language / country
+    language_code = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+
+    # Extra structured data
+    external_ids = Column(JSONB, nullable=True)   # lista de external-id normalizados
+    contributors = Column(JSONB, nullable=True)   # lista de autores/roles
+
+    # Tu campo existente
+    hash_fingerprint = Column(String, nullable=True)
+    last_modified = Column(DateTime, nullable=True, default=None)

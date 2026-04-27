@@ -1,74 +1,111 @@
+from typing import List
+
+
+def _get(d: dict | None, *keys, default=None):
+    cur = d or {}
+    for k in keys:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(k)
+        if cur is None:
+            return default
+    return cur
+
+
 class PublicationNormalizer:
-
     @staticmethod
-    def safe_get_title(summary):
-        t = summary.get("title")
+    def normalize(summary: dict, detail: dict | None = None) -> dict:
+        """
+        summary: work-summary de ORCID
+        detail: work completo (puede ser None si la llamada falla)
+        """
 
-        if t is None:
-            return None
+        # --- Core desde summary ---
+        put_code = summary.get("put-code")
 
-        # Caso 1: {"title": {"value": "..."}}
-        if isinstance(t, dict) and "title" in t and isinstance(t["title"], dict):
-            return t["title"].get("value")
+        title = _get(summary, "title", "title", "value")
+        type_ = summary.get("type")
 
-        # Caso 2: {"title": {"title": "..."}} (muy común en /works)
-        if isinstance(t, dict) and "title" in t and isinstance(t["title"], str):
-            return t["title"]
+        journal = _get(summary, "journal-title", "value")
 
-        # Caso 3: {"title": "string"}
-        if isinstance(t, str):
-            return t
+        year = _get(summary, "publication-date", "year", "value")
+        month = _get(summary, "publication-date", "month", "value")
+        day = _get(summary, "publication-date", "day", "value")
 
-        # Caso 4: {"value": "..."}
-        if isinstance(t, dict) and "value" in t:
-            return t["value"]
+        url = _get(summary, "url", "value")
+        short_description = summary.get("short-description")
 
-        return None
-
-    @staticmethod
-    def normalize_work(summary: dict) -> dict:
-
-        title = PublicationNormalizer.safe_get_title(summary)
-
-        # Journal title
-        journal_raw = summary.get("journal-title")
-        if isinstance(journal_raw, dict):
-            journal = journal_raw.get("value") or journal_raw.get("title")
-        else:
-            journal = journal_raw
-
-        # DOI
+        # DOI desde summary (external-ids)
         doi = None
-        ext_ids = summary.get("external-ids", {}).get("external-id", [])
-        for ext in ext_ids:
+        external_ids_list: List[dict] = _get(
+            summary, "external-ids", "external-id", default=[]
+        ) or []
+        for ext in external_ids_list:
             if ext.get("external-id-type") == "doi":
                 doi = ext.get("external-id-value")
                 break
 
-        # Publication year
-        pub_year = (
-            summary.get("publication-date", {})
-                   .get("year", {})
-                   .get("value")
-        )
+        # --- Si tenemos detail, enriquecemos ---
+        subtitle = None
+        citation_type = None
+        citation_value = None
+        language_code = None
+        country = None
+        external_ids_full: List[dict] | None = None
+        contributors: List[dict] | None = None
 
-        # Type
-        work_type = summary.get("type")
+        if detail:
+            # Subtitle
+            subtitle = _get(detail, "title", "subtitle", "value") or subtitle
 
-        # put-code
-        put_code = summary.get("put-code")
+            # Citation
+            citation_type = _get(detail, "citation", "citation-type")
+            citation_value = _get(detail, "citation", "citation-value")
 
-        # Fingerprint
-        fingerprint = f"{title}-{doi}-{pub_year}-{work_type}"
-        if fingerprint:
-            fingerprint = fingerprint.lower().replace(" ", "")
+            # Language
+            language_code = detail.get("language-code")
+
+            # Country
+            country = _get(detail, "country", "value")
+
+            # External IDs completos
+            external_ids_full = _get(
+                detail, "external-ids", "external-id", default=[]
+            ) or []
+
+            # Contributors
+            raw_contributors = _get(
+                detail, "contributors", "contributor", default=[]
+            ) or []
+            contributors = []
+            for c in raw_contributors:
+                contributors.append(
+                    {
+                        "name": _get(c, "credit-name", "value"),
+                        "orcid": _get(c, "contributor-orcid", "path"),
+                        "role": _get(
+                            c, "contributor-attributes", "contributor-role"
+                        ),
+                    }
+                )
 
         return {
             "put_code": put_code,
-            "title": title or "Untitled",
+            "title": title,
+            "subtitle": subtitle,
+            "type": type_,
             "journal": journal,
+            "pub_year": int(year) if year is not None else None,
+            "pub_month": int(month) if month is not None else None,
+            "pub_day": int(day) if day is not None else None,
             "doi": doi,
-            "pub_year": pub_year,
-            "type": work_type,
-            "hash_fingerprint": fingerprint
+            "url": url,
+            "short_description": short_description,
+            "citation_type": citation_type,
+            "citation_value": citation_value,
+            "language_code": language_code,
+            "country": country,
+            "external_ids": external_ids_full,
+            "contributors": contributors,
+            "hash_fingerprint": None,
         }
