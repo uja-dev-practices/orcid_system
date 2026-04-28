@@ -16,7 +16,7 @@ export function ResearcherCard({ researcher, actions = null }) {
 
       <div className="min-w-[200px] flex-1">
         <h2 className="mb-1 text-[22px] font-semibold text-ink-primary">
-          {researcher.name}
+          {researcher.name || "Investigador sin nombre"}
         </h2>
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="inline-flex items-center gap-1.5">
@@ -25,10 +25,14 @@ export function ResearcherCard({ researcher, actions = null }) {
               {researcher.orcid_id}
             </span>
           </div>
-          <span className="text-surface-border-strong">·</span>
-          <span className="text-[13px] text-ink-secondary">
-            {researcher.affiliation}
-          </span>
+          {researcher.affiliation && (
+            <>
+              <span className="text-surface-border-strong">·</span>
+              <span className="text-[13px] text-ink-secondary">
+                {researcher.affiliation}
+              </span>
+            </>
+          )}
         </div>
         <div className="mt-2 inline-flex items-center gap-1.5 text-ink-tertiary">
           <ClockIcon />

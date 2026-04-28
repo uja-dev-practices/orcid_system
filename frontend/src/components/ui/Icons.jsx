@@ -94,11 +94,29 @@ export function SearchIcon({ size = 14, className = "" }) {
   );
 }
 
+export function FilterIcon({ size = 14, className = "" }) {
+  return (
+    <svg {...base} width={size} height={size} strokeWidth={2} className={className}>
+      <path d="M3 5h18M6 12h12M10 19h4" />
+    </svg>
+  );
+}
+
 export function AlertIcon({ size = 16, className = "" }) {
   return (
     <svg {...base} width={size} height={size} className={className}>
       <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
       <path d="M12 9v4M12 17h.01" />
+    </svg>
+  );
+}
+
+export function PackageIcon({ size = 18, className = "" }) {
+  return (
+    <svg {...base} width={size} height={size} className={className}>
+      <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+      <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+      <path d="M7.5 4.21l9 5.16" />
     </svg>
   );
 }
