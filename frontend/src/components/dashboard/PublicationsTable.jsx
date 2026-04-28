@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { AlertIcon, SearchIcon } from "../ui/Icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertIcon, ChevronDownIcon, FilterIcon, SearchIcon } from "../ui/Icons";
 import { Spinner } from "../ui/Spinner";
 import { Badge } from "../ui/Badge";
 
@@ -10,6 +10,9 @@ const COLUMNS = [
   { key: "doi", label: "DOI" },
   { key: "type", label: "Tipo" },
 ];
+
+const PAGE_SIZE = 15;
+const EMPTY_SELECTION = new Set();
 
 function SortIcon({ active, direction }) {
   const path =
@@ -40,67 +43,329 @@ function sortPublications(rows, key, direction) {
 }
 
 /**
- * Publications table. Owns only UI-state (filter + sort). Data, loading and
- * error states are driven by the parent page so retries and toasts can be
- * handled in one place.
+ * Tri-state checkbox. We can't express `indeterminate` via React props, so
+ * we set it imperatively on the DOM node whenever the flag changes.
+ */
+function TriStateCheckbox({ checked, indeterminate = false, onChange, ariaLabel }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate && !checked;
+  }, [indeterminate, checked]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      aria-label={ariaLabel}
+      className="h-4 w-4 cursor-pointer accent-brand-accent"
+    />
+  );
+}
+
+/**
+ * Publications table. UI-state (filter, sort, pagination) lives here; the
+ * *selection* set is lifted to the parent so export / bulk actions can see
+ * it. Data, loading and error states are also driven by the parent so
+ * retries and toasts can be handled in one place.
+ *
+ * Selection semantics:
+ *   - The master checkbox toggles the WHOLE currently-filtered set (not
+ *     just the visible page). This matches the user mental model of
+ *     "filtrar por 2024 → marcar todas de 2024".
+ *   - Selection survives filter changes: the stored IDs remain even if
+ *     those rows are no longer visible.
  */
 export function PublicationsTable({
   publications,
   loading = false,
   error = null,
   onRetry,
+  selectedIds = EMPTY_SELECTION,
+  onSelectedIdsChange,
 }) {
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState("publication_year");
   const [sortDir, setSortDir] = useState("desc");
+  const [page, setPage] = useState(1);
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
+
+  const availableYears = useMemo(() => {
+    const years = publications
+      .map((p) => p.publication_year)
+      .filter((y) => typeof y === "number" && Number.isFinite(y));
+    if (years.length === 0) return [];
+    const min = Math.min(...years);
+    const max = Math.max(...years, new Date().getFullYear());
+    const list = [];
+    for (let y = max; y >= min; y -= 1) list.push(y);
+    return list;
+  }, [publications]);
+
+  const hasYearFilter = yearFrom !== "" || yearTo !== "";
+
+  useEffect(() => {
+    if (availableYears.length === 0) return;
+    if (yearFrom && !availableYears.includes(Number(yearFrom))) setYearFrom("");
+    if (yearTo && !availableYears.includes(Number(yearTo))) setYearTo("");
+  }, [availableYears, yearFrom, yearTo]);
 
   const filtered = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    const rows = needle
-      ? publications.filter(
-          (p) =>
-            (p.title ?? "").toLowerCase().includes(needle) ||
-            (p.journal ?? "").toLowerCase().includes(needle) ||
-            String(p.publication_year ?? "").includes(needle) ||
-            (p.doi ?? "").toLowerCase().includes(needle),
-        )
-      : publications;
+    let rows = publications;
+
+    if (needle) {
+      rows = rows.filter(
+        (p) =>
+          (p.title ?? "").toLowerCase().includes(needle) ||
+          (p.journal ?? "").toLowerCase().includes(needle) ||
+          String(p.publication_year ?? "").includes(needle) ||
+          (p.doi ?? "").toLowerCase().includes(needle),
+      );
+    }
+
+    if (hasYearFilter) {
+      const from = yearFrom ? Number(yearFrom) : null;
+      const to = yearTo ? Number(yearTo) : null;
+      rows = rows.filter((p) => {
+        const year = p.publication_year;
+        if (typeof year !== "number" || !Number.isFinite(year)) return false;
+        if (from !== null && year < from) return false;
+        if (to !== null && year > to) return false;
+        return true;
+      });
+    }
+
     return sortPublications(rows, sortKey, sortDir);
-  }, [publications, filter, sortKey, sortDir]);
+  }, [publications, filter, yearFrom, yearTo, hasYearFilter, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+
+  const pageRows = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
+  const selectionStats = useMemo(() => {
+    if (filtered.length === 0) {
+      return { allChecked: false, anyChecked: false, selectedInFiltered: 0 };
+    }
+    let count = 0;
+    for (const pub of filtered) {
+      if (selectedIds.has(pub.id)) count += 1;
+    }
+    return {
+      allChecked: count === filtered.length,
+      anyChecked: count > 0,
+      selectedInFiltered: count,
+    };
+  }, [filtered, selectedIds]);
 
   function toggleSort(key) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setPage(1);
     } else {
       setSortKey(key);
       setSortDir("desc");
+      setPage(1);
     }
   }
+
+  function emit(nextSet) {
+    onSelectedIdsChange?.(nextSet);
+  }
+
+  function toggleRow(id) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    emit(next);
+  }
+
+  function toggleAllFiltered() {
+    const next = new Set(selectedIds);
+    if (selectionStats.allChecked) {
+      for (const pub of filtered) next.delete(pub.id);
+    } else {
+      for (const pub of filtered) next.add(pub.id);
+    }
+    emit(next);
+  }
+
+  function handleYearFromChange(value) {
+    setYearFrom(value);
+    // Si el usuario elige un "Desde" mayor que el "Hasta" actual,
+    // auto-corregimos el "Hasta" para preservar un rango coherente.
+    if (value && yearTo && Number(value) > Number(yearTo)) {
+      setYearTo(value);
+    }
+    setPage(1);
+  }
+
+  function handleYearToChange(value) {
+    setYearTo(value);
+    if (value && yearFrom && Number(value) < Number(yearFrom)) {
+      setYearFrom(value);
+    }
+    setPage(1);
+  }
+
+  function clearYearFilter() {
+    setYearFrom("");
+    setYearTo("");
+    setPage(1);
+  }
+
+  const pageStart =
+    filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
+
+  const yearFilterSummary = hasYearFilter
+    ? yearFrom && yearTo && yearFrom === yearTo
+      ? `Año: ${yearFrom}`
+      : `Años: ${yearFrom || "…"} – ${yearTo || "…"}`
+    : null;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-surface-border/60 bg-surface-primary">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border/60 px-5 py-4">
-        <div>
-          <h3 className="text-base font-medium text-ink-primary">
-            Publicaciones
-          </h3>
-          <p className="mt-0.5 text-xs text-ink-tertiary">
-            {filtered.length} de {publications.length} resultados
-          </p>
+      <div className="border-b border-surface-border/60">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+          <div>
+            <h3 className="text-base font-medium text-ink-primary">
+              Publicaciones
+            </h3>
+            <p className="mt-0.5 text-xs text-ink-tertiary">
+              {filtered.length} de {publications.length} resultados
+              {yearFilterSummary && (
+                <>
+                  {" · "}
+                  <span className="text-ink-secondary">{yearFilterSummary}</span>
+                </>
+              )}
+              {selectedIds.size > 0 && (
+                <>
+                  {" · "}
+                  <span className="font-medium text-brand-accent">
+                    {selectedIds.size} seleccionada
+                    {selectedIds.size === 1 ? "" : "s"}
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+              aria-controls="pubs-advanced-filters"
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors ${
+                filtersOpen || hasYearFilter
+                  ? "border-brand-accent/50 bg-brand-accent/10 text-brand-accent"
+                  : "border-surface-border-strong bg-surface-secondary text-ink-secondary hover:bg-surface-primary"
+              }`}
+            >
+              <FilterIcon />
+              Filtros
+              {hasYearFilter && (
+                <span
+                  className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-brand-accent"
+                  aria-hidden
+                />
+              )}
+              <ChevronDownIcon
+                className={`transition-transform ${filtersOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Filtrar publicaciones..."
+                value={filter}
+                onChange={(e) => {
+                  setFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-[220px] rounded-lg border border-surface-border-strong bg-surface-secondary py-2 pl-9 pr-3.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent"
+              />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-tertiary/70">
+                <SearchIcon />
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Filtrar publicaciones..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-[220px] rounded-lg border border-surface-border-strong bg-surface-secondary py-2 pl-9 pr-3.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent"
-          />
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-tertiary/70">
-            <SearchIcon />
-          </span>
-        </div>
+
+        {filtersOpen && (
+          <div
+            id="pubs-advanced-filters"
+            className="flex flex-wrap items-end gap-4 border-t border-surface-border/60 bg-surface-secondary/40 px-5 py-3"
+          >
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="year-from"
+                className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
+              >
+                Desde año
+              </label>
+              <select
+                id="year-from"
+                value={yearFrom}
+                onChange={(e) => handleYearFromChange(e.target.value)}
+                disabled={availableYears.length === 0}
+                className="rounded-md border border-surface-border-strong bg-surface-primary px-2.5 py-1.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Cualquiera</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="year-to"
+                className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
+              >
+                Hasta año
+              </label>
+              <select
+                id="year-to"
+                value={yearTo}
+                onChange={(e) => handleYearToChange(e.target.value)}
+                disabled={availableYears.length === 0}
+                className="rounded-md border border-surface-border-strong bg-surface-primary px-2.5 py-1.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Cualquiera</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {hasYearFilter && (
+              <button
+                type="button"
+                onClick={clearYearFilter}
+                className="mb-[2px] rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-tertiary transition-colors hover:bg-surface-primary hover:text-ink-primary"
+              >
+                Limpiar rango
+              </button>
+            )}
+            {availableYears.length === 0 && (
+              <p className="mb-[2px] text-xs text-ink-tertiary">
+                Aún no hay años disponibles.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -110,9 +375,21 @@ export function PublicationsTable({
         ) : loading ? (
           <LoadingState />
         ) : (
-          <table className="w-full min-w-[640px] border-collapse">
+          <table className="w-full min-w-[720px] border-collapse">
             <thead>
               <tr className="bg-surface-secondary">
+                <th
+                  scope="col"
+                  className="w-10 border-b border-surface-border/60 px-4 py-2.5 text-left"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <TriStateCheckbox
+                    checked={selectionStats.allChecked}
+                    indeterminate={selectionStats.anyChecked}
+                    onChange={toggleAllFiltered}
+                    ariaLabel="Seleccionar todas las publicaciones del filtro actual"
+                  />
+                </th>
                 {COLUMNS.map((col) => (
                   <th
                     key={col.key}
@@ -134,58 +411,157 @@ export function PublicationsTable({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={COLUMNS.length}
+                    colSpan={COLUMNS.length + 1}
                     className="p-10 text-center text-sm text-ink-tertiary"
                   >
-                    No se encontraron publicaciones con ese filtro.
+                    No se encontraron publicaciones con los filtros aplicados.
                   </td>
                 </tr>
               ) : (
-                filtered.map((pub, i) => (
-                  <tr
-                    key={pub.id}
-                    className={`transition-colors hover:bg-surface-secondary/70 ${
-                      i < filtered.length - 1
-                        ? "border-b border-surface-border/60"
-                        : ""
-                    }`}
-                  >
-                    <td className="max-w-[280px] px-4 py-3.5 text-[13px] font-medium leading-relaxed text-ink-primary">
-                      {pub.title}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-ink-secondary">
-                      {pub.journal || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-ink-primary">
-                      {pub.publication_year ?? "—"}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {pub.doi ? (
-                        <a
-                          href={`https://doi.org/${pub.doi}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="whitespace-nowrap font-mono text-xs text-brand-accent hover:underline"
-                        >
-                          {pub.doi}
-                        </a>
-                      ) : (
-                        <span className="whitespace-nowrap font-mono text-xs text-ink-tertiary">
-                          —
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <Badge type={pub.type} />
-                    </td>
-                  </tr>
-                ))
+                pageRows.map((pub, i) => {
+                  const isSelected = selectedIds.has(pub.id);
+                  return (
+                    <tr
+                      key={pub.id}
+                      className={`transition-colors ${
+                        isSelected
+                          ? "bg-tag-article-bg/70 hover:bg-tag-article-bg"
+                          : "hover:bg-surface-secondary/70"
+                      } ${
+                        i < pageRows.length - 1
+                          ? "border-b border-surface-border/60"
+                          : ""
+                      }`}
+                    >
+                      <td
+                        className="w-10 cursor-pointer px-4 py-3.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleRow(pub.id);
+                        }}
+                      >
+                        <TriStateCheckbox
+                          checked={isSelected}
+                          onChange={() => toggleRow(pub.id)}
+                          ariaLabel={`Seleccionar publicación ${pub.title}`}
+                        />
+                      </td>
+                      <td className="max-w-[280px] px-4 py-3.5 text-[13px] font-medium leading-relaxed text-ink-primary">
+                        {pub.title}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-ink-secondary">
+                        {pub.journal || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-ink-primary">
+                        {pub.publication_year ?? "—"}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {pub.doi ? (
+                          <a
+                            href={`https://doi.org/${pub.doi}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="whitespace-nowrap font-mono text-xs text-brand-accent hover:underline"
+                          >
+                            {pub.doi}
+                          </a>
+                        ) : (
+                          <span className="whitespace-nowrap font-mono text-xs text-ink-tertiary">
+                            —
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge type={pub.type} />
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && !error && filtered.length > 0 && (
+        <PaginationBar
+          page={currentPage}
+          totalPages={totalPages}
+          pageStart={pageStart}
+          pageEnd={pageEnd}
+          total={filtered.length}
+          onPrev={() => setPage((p) => Math.max(1, Math.min(p, totalPages) - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, Math.min(p, totalPages) + 1))}
+        />
+      )}
     </section>
+  );
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  pageStart,
+  pageEnd,
+  total,
+  onPrev,
+  onNext,
+}) {
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+  const isSinglePage = totalPages <= 1;
+  const noun = total === 1 ? "publicación" : "publicaciones";
+  const visibleCount = pageEnd - pageStart + 1;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-border/60 px-5 py-3">
+      {isSinglePage ? (
+        // Caso "todo entra en una página": evitamos el "del X al Y"
+        // porque coincide con el total y resulta ruidoso. Un simple
+        // "Mostrando N de N publicaciones" comunica lo mismo con menos
+        // palabras.
+        <p className="text-xs text-ink-tertiary">
+          Mostrando{" "}
+          <span className="font-medium text-ink-secondary">{visibleCount}</span>{" "}
+          de <span className="font-medium text-ink-secondary">{total}</span>{" "}
+          {noun}
+        </p>
+      ) : (
+        <p className="text-xs text-ink-tertiary">
+          Mostrando del{" "}
+          <span className="font-medium text-ink-secondary">{pageStart}</span>{" "}
+          al <span className="font-medium text-ink-secondary">{pageEnd}</span>{" "}
+          de un total de{" "}
+          <span className="font-medium text-ink-secondary">{total}</span> {noun}
+        </p>
+      )}
+      {!isSinglePage && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={!hasPrev}
+            className="inline-flex items-center rounded-md border border-surface-border-strong bg-surface-primary px-3 py-1.5 text-xs font-medium text-ink-secondary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Anterior
+          </button>
+          <span className="text-xs text-ink-tertiary">
+            Página <span className="font-medium text-ink-primary">{page}</span>{" "}
+            de <span className="font-medium text-ink-primary">{totalPages}</span>
+          </span>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!hasNext}
+            className="inline-flex items-center rounded-md border border-surface-border-strong bg-surface-primary px-3 py-1.5 text-xs font-medium text-ink-secondary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -28,11 +28,6 @@ import {
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
-/**
- * Si el backend no está disponible, poner `VITE_USE_MOCKS=true` en
- * `.env.local` para servir todas las llamadas desde `mocks.js`.
- * En producción debe estar desactivado.
- */
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 
 export class ApiError extends Error {
@@ -168,17 +163,43 @@ export function getExportUrl(orcidId, format) {
 
 /**
  * Descarga una exportación como Blob (para forzar descarga programática).
+ *
+ * `publicationIds` es opcional; si se pasa un array no vacío, el backend
+ * filtra el export a sólo esas publicaciones (exportación selectiva). Si
+ * se omite o va vacío/null, se exporta el conjunto completo.
+ *
+ * Usamos POST (no GET) porque los IDs pueden ser cientos y no caben
+ * cómodamente en la query-string.
+ *
  * Lanza `ApiError` en fallo.
  */
-export async function downloadExport(orcidId, format, { signal } = {}) {
+export async function downloadExport(
+  orcidId,
+  format,
+  { signal, publicationIds } = {},
+) {
   if (USE_MOCKS) {
     await mockExport(format);
     return { blob: null, url: getExportUrl(orcidId, format) };
   }
+
   const url = getExportUrl(orcidId, format);
+  const ids =
+    Array.isArray(publicationIds) && publicationIds.length > 0
+      ? publicationIds
+      : null;
+
   let response;
   try {
-    response = await fetch(url, { signal });
+    response = await fetch(url, {
+      method: "POST",
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "*/*",
+      },
+      body: JSON.stringify({ publication_ids: ids }),
+    });
   } catch (cause) {
     if (cause?.name === "AbortError") throw cause;
     throw new ApiError("No se pudo contactar con el servidor.", {
