@@ -36,6 +36,8 @@ export function DashboardPage() {
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | success
   const [exportingFormat, setExportingFormat] = useState(null);
 
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
   const loadResearcher = useCallback(
     async (signal) => {
       try {
@@ -57,7 +59,16 @@ export function DashboardPage() {
       setPubsError(null);
       try {
         const data = await getPublications(orcid, { signal });
-        if (!signal?.aborted) setPublications(data);
+        if (!signal?.aborted) {
+          setPublications(data);
+          setSelectedIds((prev) => {
+            if (prev.size === 0) return prev;
+            const alive = new Set(data.map((p) => p.id));
+            const next = new Set();
+            for (const id of prev) if (alive.has(id)) next.add(id);
+            return next.size === prev.size ? prev : next;
+          });
+        }
       } catch (err) {
         if (signal?.aborted) return;
         setPubsError(err);
@@ -83,12 +94,23 @@ export function DashboardPage() {
   async function handleSync() {
     setSyncStatus("loading");
     try {
-      const updated = await syncResearcher(orcid);
-      if (updated) setResearcher(updated);
-      await loadPublications();
+      const summary = await syncResearcher(orcid);
+
+      if (summary?.status === "error") {
+        throw new Error(summary.message || "El backend rechazó la sincronización.");
+      }
+
+      await Promise.all([loadResearcher(), loadPublications()]);
+
       setSyncStatus("success");
+      const total = summary?.total ?? 0;
+      const nuevos = summary?.new_records ?? 0;
+      const actualizados = summary?.updated_records ?? 0;
       toast.success("Sincronización completada", {
-        description: "Las publicaciones se han actualizado desde ORCID.",
+        description:
+          total > 0
+            ? `${nuevos} nuevas · ${actualizados} actualizadas (${total} total).`
+            : summary?.message ?? "Sin cambios desde la última sincronización.",
       });
       setTimeout(() => setSyncStatus("idle"), SUCCESS_FLASH_MS);
     } catch (err) {
@@ -102,7 +124,10 @@ export function DashboardPage() {
   async function handleExport(format) {
     setExportingFormat(format);
     try {
-      const { blob, url } = await downloadExport(orcid, format);
+      const ids = Array.from(selectedIds);
+      const { blob, url } = await downloadExport(orcid, format, {
+        publicationIds: ids.length > 0 ? ids : undefined,
+      });
       if (blob) {
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -139,6 +164,7 @@ export function DashboardPage() {
                 <ExportDropdown
                   onExport={handleExport}
                   exportingFormat={exportingFormat}
+                  selectedCount={selectedIds.size}
                 />
               </>
             }
@@ -154,6 +180,8 @@ export function DashboardPage() {
           loading={pubsLoading}
           error={pubsError}
           onRetry={() => loadPublications()}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
         />
 
         <footer className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">

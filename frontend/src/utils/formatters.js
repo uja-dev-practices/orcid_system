@@ -16,10 +16,14 @@ export function formatDate(iso) {
 
 /**
  * Builds researcher initials (max 2 chars) from a full name.
+ * Si el backend aún no conoce el nombre, devolvemos un guion como
+ * placeholder para no dejar el avatar vacío.
  */
-export function getInitials(name = "") {
-  return name
-    .trim()
+export function getInitials(name) {
+  if (!name || typeof name !== "string") return "–";
+  const trimmed = name.trim();
+  if (!trimmed) return "–";
+  return trimmed
     .split(/\s+/)
     .map((w) => w[0] ?? "")
     .slice(0, 2)
