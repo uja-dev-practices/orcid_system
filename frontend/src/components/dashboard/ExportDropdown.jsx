@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDownIcon,
+  DocumentIcon,
   DownloadIcon,
+  PackageIcon,
 } from "../ui/Icons";
 import { Spinner } from "../ui/Spinner";
 
 const FORMATS = [
   {
     format: "xml",
-    icon: "📄",
+    icon: <DocumentIcon size={20} className="shrink-0 text-ink-secondary" />,
     label: "SWORD XML",
     desc: "Metadatos en formato Atom",
   },
   {
     format: "zip",
-    icon: "📦",
+    icon: <PackageIcon size={20} className="shrink-0 text-ink-secondary" />,
     label: "Paquete ZIP",
     desc: "XML + ficheros adjuntos",
   },
@@ -28,7 +30,11 @@ const FORMATS = [
  * `exportingFormat` (optional) lets the parent keep the button in a loading
  * state between clicks (e.g. while waiting for the backend blob).
  */
-export function ExportDropdown({ onExport, exportingFormat = null }) {
+export function ExportDropdown({
+  onExport,
+  exportingFormat = null,
+  selectedCount = 0,
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -43,11 +49,16 @@ export function ExportDropdown({ onExport, exportingFormat = null }) {
   }, []);
 
   const isBusy = Boolean(exportingFormat);
+  const hasSelection = selectedCount > 0;
 
   function handlePick(format) {
     setOpen(false);
     onExport(format);
   }
+
+  const idleLabel = hasSelection
+    ? `Exportar seleccionadas (${selectedCount})`
+    : "Exportar todas";
 
   return (
     <div className="relative" ref={rootRef}>
@@ -60,7 +71,7 @@ export function ExportDropdown({ onExport, exportingFormat = null }) {
         {isBusy ? <Spinner size={15} /> : <DownloadIcon />}
         {isBusy
           ? `Exportando ${exportingFormat.toUpperCase()}...`
-          : "Exportar SWORD"}
+          : idleLabel}
         {!isBusy && <ChevronDownIcon />}
       </button>
 
@@ -77,9 +88,7 @@ export function ExportDropdown({ onExport, exportingFormat = null }) {
                   : ""
               }`}
             >
-              <span className="text-xl" aria-hidden>
-                {icon}
-              </span>
+              {icon}
               <div>
                 <div className="text-sm font-medium text-ink-primary">
                   {label}
