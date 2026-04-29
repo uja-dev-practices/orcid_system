@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import init_db
 from app.api.researchers import router as researchers_router
 from app.api.export import router as export_router
+from app.api.auth import router as auth_router
 from app.scheduler.sync_scheduler import start_scheduler
 
 
@@ -39,6 +40,7 @@ def health():
 # ---------------------------------------------------------
 app.include_router(researchers_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 
 # ---------------------------------------------------------

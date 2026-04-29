@@ -16,6 +16,9 @@ from app.schema.researcher import (
 )
 from app.services.normalizer import PublicationNormalizer
 from app.services.orcid_client import get_works_summary, get_work_detail
+from app.schema.publication import PublicationSchema
+from app.db.models import PublicationDownload
+from app.security.jwt import get_optional_current_researcher
 
 router = APIRouter(prefix="/researchers", tags=["researchers"])
 
@@ -39,11 +42,11 @@ def publication_changed(existing: Publication, data: dict) -> bool:
     return False
 
 
-def build_researcher_stats(publications: List[Publication]) -> ResearcherStatsSchema:
+def build_researcher_stats(publications: list) -> ResearcherStatsSchema:
     publication_types: dict[str, int] = {}
 
     for publication in publications:
-        pub_type = publication.type or "unknown"
+        pub_type = getattr(publication, "type", None) or "unknown"
         publication_types[pub_type] = publication_types.get(pub_type, 0) + 1
 
     return ResearcherStatsSchema(
@@ -118,7 +121,33 @@ def _upsert_researcher_publications(
     return publications
 
 
-def build_search_response(orcid_id: str, db: Session) -> ResearcherWithPublicationsSchema:
+def _decorate_downloaded_by_me(
+    *,
+    db: Session,
+    current: Researcher | None,
+    publications: List[Publication],
+) -> List[PublicationSchema] | List[Publication]:
+    if not current:
+        return publications
+
+    downloaded_ids = {
+        row[0]
+        for row in (
+            db.query(PublicationDownload.publication_id)
+            .filter(PublicationDownload.researcher_id == current.id)
+            .all()
+        )
+    }
+
+    out: List[PublicationSchema] = []
+    for p in publications:
+        out.append(
+            PublicationSchema.model_validate(p).model_copy(update={"downloaded_by_me": p.id in downloaded_ids})
+        )
+    return out
+
+
+def build_search_response(orcid_id: str, db: Session, current: Researcher | None) -> ResearcherWithPublicationsSchema:
     researcher = db.query(Researcher).filter(Researcher.orcid_id == orcid_id).first()
     if not researcher:
         researcher = Researcher(
@@ -131,31 +160,28 @@ def build_search_response(orcid_id: str, db: Session) -> ResearcherWithPublicati
         db.flush()
 
     publications = _upsert_researcher_publications(researcher, orcid_id, db)
-    stats = build_researcher_stats(publications)
+    publications_out = _decorate_downloaded_by_me(db=db, current=current, publications=publications)
+    stats = build_researcher_stats(publications_out)
 
     return ResearcherWithPublicationsSchema(
         researcher=researcher,
-        publications=publications,
+        publications=publications_out,
         stats=stats,
         new_records=0,
         updated_records=0,
         unchanged_records=0,
-        total_records=len(publications),
+        total_records=len(publications_out),
     )
 
 
 # ---------------------------------------------------------
 # ENDPOINT 1: SEARCH + SYNC (sin contadores)
 # ---------------------------------------------------------
-@router.get("/search/{orcid_id}", response_model=ResearcherWithPublicationsSchema)
-def search_and_sync_researcher(orcid_id: str, db: Session = Depends(get_db)):
-    return build_search_response(orcid_id, db)
-
-
-@router.post("/search", response_model=ResearcherBatchSearchResponseSchema)
+@router.post("/search", response_model=ResearcherBatchSearchResponseSchema, response_model_exclude_none=True)
 def search_and_sync_researchers(
     payload: ResearcherBatchSearchRequestSchema,
     db: Session = Depends(get_db),
+    current: Researcher | None = Depends(get_optional_current_researcher),
 ):
     results: List[ResearcherWithPublicationsSchema] = []
     errors: List[ResearcherSearchErrorSchema] = []
@@ -165,7 +191,7 @@ def search_and_sync_researchers(
 
     for orcid_id in unique_orcid_ids:
         try:
-            results.append(build_search_response(orcid_id, db))
+            results.append(build_search_response(orcid_id, db, current))
         except httpx.HTTPStatusError as exc:
             db.rollback()
             errors.append(
@@ -194,8 +220,12 @@ def search_and_sync_researchers(
 # ---------------------------------------------------------
 # ENDPOINT 2: SYNC COMPLETO (con contadores + status)
 # ---------------------------------------------------------
-@router.post("/{orcid_id}/sync", response_model=ResearcherWithPublicationsSchema)
-def sync_researcher(orcid_id: str, db: Session = Depends(get_db)):
+@router.post("/{orcid_id}/sync", response_model=ResearcherWithPublicationsSchema, response_model_exclude_none=True)
+def sync_researcher(
+    orcid_id: str,
+    db: Session = Depends(get_db),
+    current: Researcher | None = Depends(get_optional_current_researcher),
+):
     researcher = db.query(Researcher).filter_by(orcid_id=orcid_id).first()
     if not researcher:
         raise HTTPException(status_code=404, detail="Researcher not found")
@@ -268,10 +298,12 @@ def sync_researcher(orcid_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(researcher)
 
+    publications_out = _decorate_downloaded_by_me(db=db, current=current, publications=publications_output)
+
     return ResearcherWithPublicationsSchema(
         researcher=researcher,
-        publications=publications_output,
-        stats=build_researcher_stats(publications_output),
+        publications=publications_out,
+        stats=build_researcher_stats(publications_out),
         new_records=new_count,
         updated_records=updated_count,
         unchanged_records=unchanged_count,

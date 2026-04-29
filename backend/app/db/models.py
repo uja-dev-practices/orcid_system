@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
@@ -61,3 +61,23 @@ class Publication(Base):
     # Tu campo existente
     hash_fingerprint = Column(String, nullable=True)
     last_modified = Column(DateTime, nullable=True, default=None)
+
+    # Legacy: descargado global (deprecado). Mantener por compatibilidad de DB.
+    downloaded = Column(Boolean, nullable=False, default=False)
+
+
+class PublicationDownload(Base):
+    """
+    Marca de descarga por usuario (researcher) sobre cualquier publicación.
+    Una fila por (researcher_id, publication_id).
+    """
+
+    __tablename__ = "publication_downloads"
+    __table_args__ = (
+        UniqueConstraint("researcher_id", "publication_id", name="uq_publication_download"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    researcher_id = Column(UUID(as_uuid=True), ForeignKey("researchers.id"), nullable=False, index=True)
+    publication_id = Column(UUID(as_uuid=True), ForeignKey("publications.id"), nullable=False, index=True)
+    downloaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)

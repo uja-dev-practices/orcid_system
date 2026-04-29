@@ -25,6 +25,5 @@ class PublicationSchema(BaseModel):
     hash_fingerprint: str | None = None
     last_modified: datetime | None = None
     status: str | None = None
-
-    class Config:
-        from_attributes = True
+    downloaded_by_me: bool | None = None
+    model_config = {"from_attributes": True}
