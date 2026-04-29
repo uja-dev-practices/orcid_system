@@ -13,7 +13,10 @@ export default defineConfig(({ mode }) => {
       host: true,
       port: 5173,
       proxy: {
-        '/researchers': {
+        // El backend agrupa todo bajo /api (researchers, export, …).
+        // Con un único prefijo evitamos tener que mantener una entrada
+        // por router cada vez que se añada un endpoint nuevo.
+        '/api': {
           target: proxyTarget,
           changeOrigin: true,
         },
