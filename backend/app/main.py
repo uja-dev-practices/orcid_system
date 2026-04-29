@@ -1,10 +1,14 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
 from app.db.session import init_db
+from app.db.session import get_db
 from app.api.researchers import router as researchers_router
 from app.api.export import router as export_router
 from app.api.auth import router as auth_router
+from app.api.auth import _complete_oauth_login
+from app.schema.auth import OrcidLoginResponseSchema
 from app.scheduler.sync_scheduler import start_scheduler
 
 
@@ -33,6 +37,15 @@ def startup_event():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/callback", response_model=OrcidLoginResponseSchema)
+def oauth_callback_root(code: str, db: Session = Depends(get_db)):
+    """
+    Alias para probar redirect URIs como `https://127.0.0.1/callback` en local.
+    Intercambia el code con ORCID y emite el JWT.
+    """
+    return _complete_oauth_login(code=code, db=db)
 
 
 # ---------------------------------------------------------

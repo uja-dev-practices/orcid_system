@@ -1,7 +1,9 @@
 import os
 import urllib.parse
+from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import load_dotenv
 import httpx
 
 TOKEN_URL_SANDBOX = "https://sandbox.orcid.org/oauth/token"
@@ -15,6 +17,11 @@ BASE_URL_SANDBOX = "https://pub.sandbox.orcid.org/v3.0"
 
 class ORCIDClient:
     def __init__(self):
+        # Asegura que al ejecutar `uvicorn` local también se carga `backend/.env`.
+        # (En docker `ORCID_REDIRECT_URI` y secretos llegan por env_file, así que esto no molesta.)
+        _env_path = Path(__file__).resolve().parents[2] / ".env"
+        load_dotenv(dotenv_path=_env_path, override=False)
+
         self.client_id = os.getenv("ORCID_CLIENT_ID")
         self.client_secret = os.getenv("ORCID_CLIENT_SECRET")
         self._token_cache: Optional[str] = None
