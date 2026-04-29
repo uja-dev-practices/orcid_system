@@ -1,9 +1,11 @@
 import os
-from typing import Optional
+import urllib.parse
+from typing import Any, Optional
 
 import httpx
 
 TOKEN_URL_SANDBOX = "https://sandbox.orcid.org/oauth/token"
+AUTHORIZATION_URL_SANDBOX = "https://sandbox.orcid.org/oauth/authorize"
 BASE_URL_SANDBOX = "https://pub.sandbox.orcid.org/v3.0"
 
 # Si en algún momento pasas a producción, cambiarías a:
@@ -17,6 +19,7 @@ class ORCIDClient:
         self.client_secret = os.getenv("ORCID_CLIENT_SECRET")
         self._token_cache: Optional[str] = None
         self.token_url = TOKEN_URL_SANDBOX
+        self.authorization_url = AUTHORIZATION_URL_SANDBOX
         self.base_url = BASE_URL_SANDBOX
 
     # ---------------------------------------------------------
@@ -79,6 +82,51 @@ class ORCIDClient:
             response = client.get(url, headers=self._headers())
             if response.status_code != 200:
                 return None
+            return response.json()
+
+    # ---------------------------------------------------------
+    # OAuth 3-legged (authorization code)
+    # ---------------------------------------------------------
+    def build_authorize_url(
+        self,
+        *,
+        redirect_uri: str,
+        scope: str = "/authenticate",
+        state: str | None = None,
+    ) -> str:
+        """
+        Creates the ORCID authorization URL (user signs in at ORCID and returns an auth code).
+        """
+        params: dict[str, Any] = {
+            "client_id": self.client_id,
+            "response_type": "code",
+            # Scope(s) are space-separated in the authorize URL.
+            "scope": scope,
+            "redirect_uri": redirect_uri,
+        }
+        if state:
+            params["state"] = state
+        return f"{self.authorization_url}?{urllib.parse.urlencode(params)}"
+
+    def exchange_authorization_code(
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+    ) -> dict:
+        """
+        Server-side code exchange. Response includes at least `orcid` and usually `name`.
+        """
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        with httpx.Client(timeout=20.0) as client:
+            response = client.post(self.token_url, data=data, headers={"Accept": "application/json"})
+            response.raise_for_status()
             return response.json()
 
 

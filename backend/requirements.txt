@@ -11,3 +11,4 @@ authlib
 redis
 APScheduler==3.10.4
 requests
+python-jose[cryptography]

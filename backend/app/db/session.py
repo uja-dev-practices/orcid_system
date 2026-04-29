@@ -1,6 +1,10 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
+from dotenv import load_dotenv
+
+# Cargar variables del .env para ejecuciones locales (en Docker ya vendrán por entorno).
+load_dotenv()
 
 # -----------------------------
 # DATABASE URL
@@ -42,3 +46,18 @@ def init_db():
 
     # Crea todas las tablas si no existen
     Base.metadata.create_all(bind=engine)
+
+    # Pequeñas migraciones "best-effort" para entornos sin Alembic.
+    # (create_all no altera tablas existentes)
+    _ensure_columns()
+
+
+def _ensure_columns():
+    insp = inspect(engine)
+    if "publications" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("publications")}
+        if "downloaded" not in cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE publications ADD COLUMN downloaded BOOLEAN NOT NULL DEFAULT FALSE")
+                )
