@@ -1,5 +1,7 @@
 import httpx
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -10,6 +12,10 @@ from app.schema.auth import OrcidLoginResponseSchema
 from app.security.jwt import create_access_token
 from app.services.orcid_client import ORCIDClient
 from app.utils.orcid_validator import is_valid_orcid
+
+# Asegura que al ejecutar `uvicorn` local también se carga `backend/.env`.
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_ENV_PATH, override=False)
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,25 +35,12 @@ def _orcid_redirect_uri() -> str:
     return os.getenv("ORCID_REDIRECT_URI") or "http://localhost:8000/api/auth/orcid/callback"
 
 
-@router.get("/orcid/authorize")
-def authorize_orcid():
+def _complete_oauth_login(*, code: str, db: Session) -> OrcidLoginResponseSchema:
     """
-    Inicia el flujo OAuth 3-legged (authorization code) hacia ORCID.
-    """
-    client = ORCIDClient()
-    authorize_url = client.build_authorize_url(
-        redirect_uri=_orcid_redirect_uri(),
-        # Solo necesitamos el Authenticated iD del usuario.
-        scope="/authenticate",
-    )
-    return RedirectResponse(authorize_url)
-
-
-@router.get("/orcid/callback", response_model=OrcidLoginResponseSchema)
-def orcid_callback(code: str, db: Session = Depends(get_db)):
-    """
-    Recibe el `code` devuelto por ORCID, lo intercambia por tokens en el servidor
-    y emite nuestro JWT solo para el ORCID autenticado por ORCID.
+    Completa el login OAuth:
+    1) intercambio del `code` en ORCID (server-side)
+    2) crea/actualiza el investigador
+    3) emite nuestro JWT
     """
     if not code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing ORCID authorization code")
@@ -94,4 +87,23 @@ def orcid_callback(code: str, db: Session = Depends(get_db)):
 
     token = create_access_token(subject=orcid_id, extra={"rid": str(researcher.id)})
     return OrcidLoginResponseSchema(access_token=token)
+
+
+@router.get("/orcid/authorize")
+def authorize_orcid():
+    """
+    Inicia el flujo OAuth 3-legged (authorization code) hacia ORCID.
+    """
+    client = ORCIDClient()
+    authorize_url = client.build_authorize_url(
+        redirect_uri=_orcid_redirect_uri(),
+        # Solo necesitamos el Authenticated iD del usuario.
+        scope="/authenticate",
+    )
+    return RedirectResponse(authorize_url)
+
+
+@router.get("/orcid/callback", response_model=OrcidLoginResponseSchema)
+def orcid_callback(code: str, db: Session = Depends(get_db)):
+    return _complete_oauth_login(code=code, db=db)
 
