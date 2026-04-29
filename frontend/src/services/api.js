@@ -145,7 +145,6 @@ function normalizePublication(p) {
     hash_fingerprint: p.hash_fingerprint ?? null,
     last_modified: p.last_modified ?? null,
     status: p.status ?? null,
-    // null when request was made without a JWT (user not logged in)
     downloaded_by_me: p.downloaded_by_me ?? null,
   };
 }
