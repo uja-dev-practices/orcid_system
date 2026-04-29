@@ -7,11 +7,18 @@ import { DocumentIcon } from "../components/ui/Icons";
 import { OrcidLogo } from "../components/ui/OrcidLogo";
 import { Spinner } from "../components/ui/Spinner";
 import { formatOrcidInput, isValidOrcid } from "../utils/orcid";
-import { validateOrcid } from "../services/api";
+import { searchResearcher } from "../services/api";
 
 /**
  * Entry view: OAuth button + manual ORCID iD entry.
- * Navigates to `/dashboard/:orcid` after a successful `validateOrcid` call.
+ *
+ * El endpoint de búsqueda grupal `POST /api/researchers/search` (usado
+ * para 1 solo ORCID) es "todo en uno":
+ * valida el formato + dígito de control en el servidor, lo crea en BD si
+ * no existe, sincroniza con ORCID y devuelve `researcher + publications`.
+ * Por eso aquí basta con una sola llamada y, una vez que tenemos el
+ * bundle, navegamos al dashboard pasándoselo por `state` para evitar
+ * la doble petición.
  */
 export function LandingPage() {
   const navigate = useNavigate();
@@ -34,8 +41,8 @@ export function LandingPage() {
     }
     setValidating(true);
     try {
-      await validateOrcid(orcidInput);
-      navigate(`/dashboard/${orcidInput}`);
+      const bundle = await searchResearcher(orcidInput);
+      navigate(`/dashboard/${orcidInput}`, { state: { bundle } });
     } catch (err) {
       toast.error("No se pudo validar el ORCID iD", {
         description: err?.message ?? "Inténtalo de nuevo en unos segundos.",
@@ -142,7 +149,7 @@ export function LandingPage() {
                   } disabled:cursor-not-allowed`}
                 >
                   {validating && <Spinner size={14} />}
-                  {validating ? "Validando..." : "Buscar"}
+                  {validating ? "Buscando..." : "Buscar"}
                 </button>
               </div>
               {error && (

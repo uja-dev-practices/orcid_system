@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useParams, Navigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useParams, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppHeader } from "../components/layout/AppHeader";
@@ -10,10 +10,8 @@ import { ExportDropdown } from "../components/dashboard/ExportDropdown";
 import { SyncButton } from "../components/dashboard/SyncButton";
 import {
   downloadExport,
-  getExportUrl,
-  getPublications,
+  searchResearcher,
   syncResearcher,
-  validateOrcid,
 } from "../services/api";
 import { isValidOrcid } from "../utils/orcid";
 
@@ -21,16 +19,27 @@ const SUCCESS_FLASH_MS = 3000;
 
 /**
  * Researcher detail page. Owns:
- *   - Initial researcher lookup (validate + publications fetch on mount).
- *   - Sync workflow (POST + refresh + success toast).
- *   - Export workflow (download blob + success/error toast).
+ *   - Carga inicial vía `searchResearcher` (todo en uno: researcher +
+ *     publications + resumen de cambios). Si llegamos desde la landing
+ *     usamos el bundle ya cargado en `location.state` para evitar
+ *     duplicar la petición.
+ *   - Re-sync manual (POST + actualización de estado in-place + toast).
+ *   - Exportación SWORD/ZIP (selectiva si hay selección, masiva si no).
  */
 export function DashboardPage() {
   const { orcid } = useParams();
+  const location = useLocation();
+  // El bundle del Landing solo lo consumimos UNA vez: la primera vez
+  // que se monta el componente. Si el usuario refresca, navega o vuelve
+  // atrás, queremos que se vuelva a pedir al backend.
+  const initialBundleRef = useRef(location.state?.bundle ?? null);
 
-  const [researcher, setResearcher] = useState(null);
-  const [publications, setPublications] = useState([]);
-  const [pubsLoading, setPubsLoading] = useState(true);
+  const initialBundle = initialBundleRef.current;
+  const [researcher, setResearcher] = useState(initialBundle?.researcher ?? null);
+  const [publications, setPublications] = useState(
+    initialBundle?.publications ?? [],
+  );
+  const [pubsLoading, setPubsLoading] = useState(!initialBundle);
   const [pubsError, setPubsError] = useState(null);
 
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | success
@@ -38,40 +47,35 @@ export function DashboardPage() {
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
-  const loadResearcher = useCallback(
-    async (signal) => {
-      try {
-        const data = await validateOrcid(orcid, { signal });
-        if (!signal?.aborted) setResearcher(data);
-      } catch (err) {
-        if (signal?.aborted) return;
-        toast.error("No se pudo cargar el investigador", {
-          description: err?.message ?? "Error desconocido.",
-        });
-      }
-    },
-    [orcid],
-  );
-
-  const loadPublications = useCallback(
+  /**
+   * Carga (o recarga) el bundle completo del investigador. Centralizamos
+   * la lógica aquí para que tanto el `useEffect` inicial como el botón
+   * "Reintentar" del estado de error compartan código.
+   */
+  const loadBundle = useCallback(
     async (signal) => {
       setPubsLoading(true);
       setPubsError(null);
       try {
-        const data = await getPublications(orcid, { signal });
-        if (!signal?.aborted) {
-          setPublications(data);
-          setSelectedIds((prev) => {
-            if (prev.size === 0) return prev;
-            const alive = new Set(data.map((p) => p.id));
-            const next = new Set();
-            for (const id of prev) if (alive.has(id)) next.add(id);
-            return next.size === prev.size ? prev : next;
-          });
-        }
+        const bundle = await searchResearcher(orcid, { signal });
+        if (signal?.aborted) return;
+        setResearcher(bundle.researcher);
+        setPublications(bundle.publications);
+        // La selección sobrevive recargas: nos quedamos con los IDs que
+        // siguen existiendo tras el sync, descartamos los que no.
+        setSelectedIds((prev) => {
+          if (prev.size === 0) return prev;
+          const alive = new Set(bundle.publications.map((p) => p.id));
+          const next = new Set();
+          for (const id of prev) if (alive.has(id)) next.add(id);
+          return next.size === prev.size ? prev : next;
+        });
       } catch (err) {
         if (signal?.aborted) return;
         setPubsError(err);
+        toast.error("No se pudo cargar el investigador", {
+          description: err?.message ?? "Error desconocido.",
+        });
       } finally {
         if (!signal?.aborted) setPubsLoading(false);
       }
@@ -81,11 +85,17 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!isValidOrcid(orcid)) return;
+    // Si venimos del Landing con el bundle precargado, evitamos la
+    // segunda petición y consumimos el ref para que un refresh sí pegue
+    // al backend.
+    if (initialBundleRef.current) {
+      initialBundleRef.current = null;
+      return;
+    }
     const ctrl = new AbortController();
-    loadResearcher(ctrl.signal);
-    loadPublications(ctrl.signal);
+    loadBundle(ctrl.signal);
     return () => ctrl.abort();
-  }, [orcid, loadResearcher, loadPublications]);
+  }, [orcid, loadBundle]);
 
   if (!isValidOrcid(orcid)) {
     return <Navigate to="/" replace />;
@@ -94,23 +104,24 @@ export function DashboardPage() {
   async function handleSync() {
     setSyncStatus("loading");
     try {
-      const summary = await syncResearcher(orcid);
-
-      if (summary?.status === "error") {
-        throw new Error(summary.message || "El backend rechazó la sincronización.");
-      }
-
-      await Promise.all([loadResearcher(), loadPublications()]);
+      const bundle = await syncResearcher(orcid);
+      setResearcher(bundle.researcher);
+      setPublications(bundle.publications);
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return prev;
+        const alive = new Set(bundle.publications.map((p) => p.id));
+        const next = new Set();
+        for (const id of prev) if (alive.has(id)) next.add(id);
+        return next.size === prev.size ? prev : next;
+      });
 
       setSyncStatus("success");
-      const total = summary?.total ?? 0;
-      const nuevos = summary?.new_records ?? 0;
-      const actualizados = summary?.updated_records ?? 0;
+      const { newRecords, updatedRecords, totalRecords } = bundle;
+      const hasChanges = newRecords > 0 || updatedRecords > 0;
       toast.success("Sincronización completada", {
-        description:
-          total > 0
-            ? `${nuevos} nuevas · ${actualizados} actualizadas (${total} total).`
-            : summary?.message ?? "Sin cambios desde la última sincronización.",
+        description: hasChanges
+          ? `${newRecords} nuevas · ${updatedRecords} actualizadas (${totalRecords} total).`
+          : "Sin cambios desde la última sincronización.",
       });
       setTimeout(() => setSyncStatus("idle"), SUCCESS_FLASH_MS);
     } catch (err) {
@@ -125,21 +136,27 @@ export function DashboardPage() {
     setExportingFormat(format);
     try {
       const ids = Array.from(selectedIds);
-      const { blob, url } = await downloadExport(orcid, format, {
+      const { blob } = await downloadExport(orcid, format, {
         publicationIds: ids.length > 0 ? ids : undefined,
       });
       if (blob) {
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        anchor.download = `sword-${orcid}.${format}`;
+        // Usamos extensiones reales: el endpoint SWORD devuelve XML.
+        const extension = format === "xml" ? "xml" : format;
+        anchor.download = `sword-${orcid}.${extension}`;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
         URL.revokeObjectURL(objectUrl);
       }
+      const scope =
+        ids.length > 0
+          ? `${ids.length} publicación${ids.length === 1 ? "" : "es"} seleccionada${ids.length === 1 ? "" : "s"}`
+          : "todo el investigador";
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
-        description: url ?? getExportUrl(orcid, format),
+        description: scope,
       });
     } catch (err) {
       toast.error(`Error al exportar ${format.toUpperCase()}`, {
@@ -179,7 +196,7 @@ export function DashboardPage() {
           publications={publications}
           loading={pubsLoading}
           error={pubsError}
-          onRetry={() => loadPublications()}
+          onRetry={() => loadBundle()}
           selectedIds={selectedIds}
           onSelectedIdsChange={setSelectedIds}
         />

@@ -5,18 +5,22 @@
  * y lanza `ApiError` en respuestas no 2xx, de forma que cada pantalla
  * decide cómo mostrarlo (toast, error inline, reintento, …).
  *
- * La URL base se inyecta en build via `VITE_API_URL` (ver `.env.example`).
- * En desarrollo la dejamos en blanco para que las peticiones pasen por
- * el proxy de Vite (ver `vite.config.js`) y así eludir CORS mientras el
- * backend no lo tenga configurado.
+ * Configuración:
+ *   - `VITE_API_URL`: URL base del backend, ya con el prefijo `/api`
+ *     (p. ej. `http://localhost:8000/api`). Si se deja vacío, las
+ *     peticiones se hacen contra `/api` y las redirige el proxy de
+ *     Vite (ver `vite.config.js`).
+ *   - `VITE_API_KEY`: clave compartida con el backend, se manda en el
+ *     header `X-API-Key` de TODAS las peticiones.
  *
- * Contrato real del backend (prefijo de router: `/researchers`):
- *   - POST   /researchers/?orcid_id=XXXX-XXXX-XXXX-XXXX    (crea/upsert)
- *   - GET    /researchers/{orcid_id}
- *   - POST   /researchers/{orcid_id}/sync
- *   - GET    /researchers/{orcid_id}/publications
- *   - GET    /researchers/{orcid_id}/export/sword.xml
- *   - GET    /researchers/{orcid_id}/export/sword.zip
+ * Contrato actual del backend (todo bajo `/api`):
+ *   - GET    /researchers/search                          → buscador grupal (todo en uno)
+ *   - GET    /researchers/search/{orcid_id}               → buscador individual (todo en uno)
+ *   - POST   /researchers/{orcid_id}/sync                 → re-sync manual
+ *   - POST   /export/sword/publications  body=[ids]       → SWORD XML de selección
+ *   - POST   /export/zip/publications    body=[ids]       → ZIP de selección
+ *   - GET    /export/sword/researcher/{orcid_id}          → SWORD XML de todo el investigador
+ *   - GET    /export/zip/researcher/{orcid_id}            → ZIP de todo el investigador
  */
 
 import {
@@ -26,7 +30,12 @@ import {
   mockValidateOrcid,
 } from "./mocks";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+// `VITE_API_URL` puede venir como "" (vacío) en `.env` para usar el proxy
+// de Vite. En ese caso no queremos usar string vacío como base, sino `/api`.
+const BASE_URL = (import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL
+  : "/api").replace(/\/$/, "");
+const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 
@@ -39,16 +48,33 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Construye la cabecera base que llevan TODAS las peticiones (incluidas
+ * las descargas de blob). Si la API key está sin definir lo avisamos en
+ * consola para no fallar silenciosamente con un 401 críptico.
+ */
+function buildAuthHeaders(extra = {}) {
+  if (!API_KEY && import.meta.env.DEV) {
+    console.warn(
+      "[api] VITE_API_KEY no está definida; las peticiones serán rechazadas por el backend.",
+    );
+  }
+  return {
+    Accept: "application/json",
+    ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+    ...extra,
+  };
+}
+
 async function request(path, { method = "GET", body, signal, headers } = {}) {
   const url = `${BASE_URL}${path}`;
   const init = {
     method,
     signal,
-    headers: {
-      Accept: "application/json",
+    headers: buildAuthHeaders({
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...headers,
-    },
+    }),
   };
   if (body !== undefined) init.body = JSON.stringify(body);
 
@@ -89,87 +115,216 @@ async function request(path, { method = "GET", body, signal, headers } = {}) {
 /**
  * Adapta el esquema del backend (`pub_year`, campos opcionalmente `null`)
  * al que espera la UI (`publication_year`, strings seguras para filtrar).
+ *
+ * Mantenemos también los campos crudos relevantes (`put_code`, `subtitle`,
+ * `citation_value`, …) por si una vista futura los necesita sin tener
+ * que volver a tocar este mapper.
  */
 function normalizePublication(p) {
   return {
     id: p.id,
     put_code: p.put_code ?? null,
     title: p.title || "Sin título",
+    subtitle: p.subtitle ?? null,
     journal: p.journal || "",
     doi: p.doi || "",
     publication_year: p.pub_year ?? null,
+    publication_month: p.pub_month ?? null,
+    publication_day: p.pub_day ?? null,
     type: p.type || null,
+    url: p.url ?? null,
+    short_description: p.short_description ?? null,
+    citation_type: p.citation_type ?? null,
+    citation_value: p.citation_value ?? null,
+    language_code: p.language_code ?? null,
+    country: p.country ?? null,
+    external_ids: Array.isArray(p.external_ids) ? p.external_ids : [],
+    contributors: Array.isArray(p.contributors) ? p.contributors : [],
     hash_fingerprint: p.hash_fingerprint ?? null,
     last_modified: p.last_modified ?? null,
+    status: p.status ?? null,
+  };
+}
+
+/**
+ * Normaliza la respuesta unificada `{ researcher, publications, … }` que
+ * devuelven tanto el buscador individual como el endpoint de sync.
+ * Devuelve siempre la misma forma para que las pantallas no tengan que
+ * conocer detalles del backend.
+ */
+function normalizeResearcherBundle(raw) {
+  if (!raw || typeof raw !== "object") {
+    return {
+      researcher: null,
+      publications: [],
+      newRecords: 0,
+      updatedRecords: 0,
+      unchangedRecords: 0,
+      totalRecords: 0,
+    };
+  }
+  const publications = Array.isArray(raw.publications)
+    ? raw.publications.map(normalizePublication)
+    : [];
+  return {
+    researcher: raw.researcher ?? null,
+    publications,
+    newRecords: raw.new_records ?? 0,
+    updatedRecords: raw.updated_records ?? 0,
+    unchangedRecords: raw.unchanged_records ?? 0,
+    totalRecords: raw.total_records ?? publications.length,
   };
 }
 
 /* ───────────────────────────── Endpoints ─────────────────────────────── */
 
 /**
- * Asegura que el investigador existe en el backend y devuelve su ficha
- * completa.
- *
- * Como el backend no expone un endpoint de validación puro, hacemos:
- *   1. POST /researchers/?orcid_id=... (idempotente: crea o devuelve el
- *      existente; valida formato + dígito de control en el servidor).
- *   2. GET  /researchers/{orcid_id}    (para recuperar el objeto completo:
- *      name, last_sync_at, etc.).
+ * Búsqueda "todo en uno" para 1 investigador.
  */
-export async function validateOrcid(orcidId, { signal } = {}) {
-  if (USE_MOCKS) return mockValidateOrcid(orcidId);
+export async function searchResearcher(orcidId, { signal } = {}) {
+  if (USE_MOCKS) {
+    const researcher = await mockValidateOrcid(orcidId);
+    const publications = await mockGetPublications(orcidId);
+    return {
+      researcher,
+      publications,
+      newRecords: 0,
+      updatedRecords: 0,
+      unchangedRecords: publications.length,
+      totalRecords: publications.length,
+    };
+  }
 
-  await request(
-    `/researchers/?orcid_id=${encodeURIComponent(orcidId)}`,
-    { method: "POST", signal },
-  );
-  return request(`/researchers/${encodeURIComponent(orcidId)}`, { signal });
+  const batch = await searchResearchersBulk([orcidId], { signal });
+  const first = batch.results?.[0] ?? null;
+  if (first) return first;
+
+  const firstError = batch.errors?.[0];
+  throw new ApiError(firstError?.detail ?? "No se pudo validar el ORCID iD.", {
+    payload: firstError,
+  });
 }
 
-/** GET /researchers/{orcid}/publications — normalizado para la UI. */
-export async function getPublications(orcidId, { signal } = {}) {
-  if (USE_MOCKS) return mockGetPublications(orcidId);
+/**
+ * Búsqueda grupal: devuelve `results[]` (uno por cada ORCID) junto a
+ * `errors[]` y contadores.
+ *
+ * Contrato backend:
+ *   POST /researchers/search
+ *   body: { "orcid_ids": ["id1", "id2"] }
+ */
+export async function searchResearchersBulk(orcidIds, { signal } = {}) {
+  const ids = Array.isArray(orcidIds) ? orcidIds : [orcidIds];
+  if (USE_MOCKS) {
+    const results = [];
+    for (const id of ids) {
+      const researcher = await mockValidateOrcid(id);
+      const publications = await mockGetPublications(id);
+      results.push({
+        researcher,
+        publications,
+        newRecords: 0,
+        updatedRecords: 0,
+        unchangedRecords: publications.length,
+        totalRecords: publications.length,
+      });
+    }
+    return {
+      results,
+      errors: [],
+      totalRequested: ids.length,
+      totalProcessed: results.length,
+    };
+  }
 
-  const raw = await request(
-    `/researchers/${encodeURIComponent(orcidId)}/publications`,
-    { signal },
-  );
-  return Array.isArray(raw) ? raw.map(normalizePublication) : [];
+  const raw = await request(`/researchers/search`, {
+    method: "POST",
+    body: { orcid_ids: ids },
+    signal,
+  });
+
+  const results = Array.isArray(raw?.results)
+    ? raw.results.map(normalizeResearcherBundle)
+    : [];
+
+  return {
+    results,
+    errors: Array.isArray(raw?.errors) ? raw.errors : [],
+    totalRequested: raw?.total_requested ?? ids.length,
+    totalProcessed: raw?.total_processed ?? results.length,
+  };
 }
 
 /**
  * POST /researchers/{orcid}/sync — dispara el re-harvest desde ORCID.
  *
- * El backend devuelve un resumen del job (`{status, message, new_records,
- * updated_records, total, researcher}`), no el researcher completo.
- * El caller debe refetch-ear el researcher y sus publicaciones.
+ * Ahora devuelve el bundle completo `{ researcher, publications,
+ * new_records, updated_records, unchanged_records, total_records }`,
+ * así que el caller puede refrescar el dashboard sin volver a pedir
+ * las publicaciones por separado.
  */
-export function syncResearcher(orcidId, { signal } = {}) {
-  if (USE_MOCKS) return mockSyncResearcher(orcidId);
+export async function syncResearcher(orcidId, { signal } = {}) {
+  if (USE_MOCKS) {
+    const summary = await mockSyncResearcher(orcidId);
+    const publications = await mockGetPublications(orcidId);
+    return {
+      researcher: { orcid_id: orcidId },
+      publications,
+      newRecords: summary?.new_records ?? 0,
+      updatedRecords: summary?.updated_records ?? 0,
+      unchangedRecords: 0,
+      totalRecords: summary?.total ?? publications.length,
+    };
+  }
 
-  return request(`/researchers/${encodeURIComponent(orcidId)}/sync`, {
-    method: "POST",
-    signal,
-  });
+  const raw = await request(
+    `/researchers/${encodeURIComponent(orcidId)}/sync`,
+    { method: "POST", signal },
+  );
+  return normalizeResearcherBundle(raw);
+}
+
+/* ───────────────────────────── Exportación ───────────────────────────── */
+
+/**
+ * Mapa de formatos UI → segmento del path en el backend.
+ * `xml` mantiene el nombre histórico que ya usaba la UI (`SWORD XML`)
+ * pero apunta al endpoint nuevo `/export/sword/...`.
+ */
+const EXPORT_PATH_SEGMENT = {
+  xml: "sword",
+  zip: "zip",
+};
+
+function exportSegmentFor(format) {
+  const segment = EXPORT_PATH_SEGMENT[format];
+  if (!segment) throw new ApiError(`Formato de exportación no soportado: ${format}`);
+  return segment;
 }
 
 /**
- * Construye la URL pública de exportación para enlaces directos
- * (sin pasar por `fetch`). La usa el dropdown de exportación.
+ * URL pública del endpoint que descarga TODO el investigador
+ * (`GET /export/{sword|zip}/researcher/{orcid_id}`). La usamos como
+ * dato meramente informativo en los toasts de éxito; las descargas
+ * reales se disparan vía blob para poder forzar el download.
+ *
+ * Ojo: estas URLs requieren `X-API-Key`, así que NO sirven como link
+ * directo en una etiqueta `<a href>`; las exponemos para mostrarlas o
+ * loguearlas, no para navegar.
  */
 export function getExportUrl(orcidId, format) {
-  return `${BASE_URL}/researchers/${encodeURIComponent(orcidId)}/export/sword.${format}`;
+  const segment = exportSegmentFor(format);
+  return `${BASE_URL}/export/${segment}/researcher/${encodeURIComponent(orcidId)}`;
 }
 
 /**
  * Descarga una exportación como Blob (para forzar descarga programática).
  *
- * `publicationIds` es opcional; si se pasa un array no vacío, el backend
- * filtra el export a sólo esas publicaciones (exportación selectiva). Si
- * se omite o va vacío/null, se exporta el conjunto completo.
- *
- * Usamos POST (no GET) porque los IDs pueden ser cientos y no caben
- * cómodamente en la query-string.
+ * - Si `publicationIds` viene con un array no vacío usamos el endpoint
+ *   selectivo `POST /export/{sword|zip}/publications` con body
+ *   `["id1", "id2", ...]` (array crudo, tal como espera el backend).
+ * - Si viene vacío/undefined usamos el endpoint masivo
+ *   `GET /export/{sword|zip}/researcher/{orcid_id}` y descargamos todo.
  *
  * Lanza `ApiError` en fallo.
  */
@@ -183,23 +338,29 @@ export async function downloadExport(
     return { blob: null, url: getExportUrl(orcidId, format) };
   }
 
-  const url = getExportUrl(orcidId, format);
+  const segment = exportSegmentFor(format);
   const ids =
     Array.isArray(publicationIds) && publicationIds.length > 0
       ? publicationIds
       : null;
 
+  const url = ids
+    ? `${BASE_URL}/export/${segment}/publications`
+    : `${BASE_URL}/export/${segment}/researcher/${encodeURIComponent(orcidId)}`;
+
+  const init = {
+    method: ids ? "POST" : "GET",
+    signal,
+    headers: buildAuthHeaders({
+      Accept: "*/*",
+      ...(ids ? { "Content-Type": "application/json" } : {}),
+    }),
+  };
+  if (ids) init.body = JSON.stringify(ids);
+
   let response;
   try {
-    response = await fetch(url, {
-      method: "POST",
-      signal,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "*/*",
-      },
-      body: JSON.stringify({ publication_ids: ids }),
-    });
+    response = await fetch(url, init);
   } catch (cause) {
     if (cause?.name === "AbortError") throw cause;
     throw new ApiError("No se pudo contactar con el servidor.", {
@@ -208,9 +369,19 @@ export async function downloadExport(
     });
   }
   if (!response.ok) {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      /* sin cuerpo JSON */
+    }
+    const detail =
+      payload?.detail ?? payload?.message ?? response.statusText ?? "Error";
     throw new ApiError(
-      `No se pudo exportar el fichero ${format.toUpperCase()}.`,
-      { status: response.status },
+      typeof detail === "string"
+        ? detail
+        : `No se pudo exportar el fichero ${format.toUpperCase()}.`,
+      { status: response.status, payload },
     );
   }
   const blob = await response.blob();
