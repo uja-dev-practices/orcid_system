@@ -4,6 +4,7 @@ import {
   DocumentIcon,
   DownloadIcon,
   PackageIcon,
+  SparkleIcon,
 } from "../ui/Icons";
 import { Spinner } from "../ui/Spinner";
 
@@ -23,17 +24,20 @@ const FORMATS = [
 ];
 
 /**
- * SWORD export dropdown. Delegates the actual download to `onExport(format)`
- * so it can be wired up either to the real API or to a mock layer from the
- * parent page.
+ * SWORD export dropdown. Delegatea the actual download to `onExport(format)`.
  *
- * `exportingFormat` (optional) lets the parent keep the button in a loading
- * state between clicks (e.g. while waiting for the backend blob).
+ * Props:
+ *   - `isAuthenticated`      → cambia el texto del botón principal.
+ *   - `newPublicationsCount` → cuántas publicaciones tiene downloaded_by_me=false.
+ *   - `selectedCount`        → publicaciones seleccionadas manualmente.
+ *   - `exportingFormat`      → formato en curso (pone el botón en loading).
  */
 export function ExportDropdown({
   onExport,
   exportingFormat = null,
   selectedCount = 0,
+  isAuthenticated = false,
+  newPublicationsCount = 0,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -56,19 +60,40 @@ export function ExportDropdown({
     onExport(format);
   }
 
-  const idleLabel = hasSelection
-    ? `Exportar seleccionadas (${selectedCount})`
-    : "Exportar todas";
+  // Label logic:
+  //   manual selection → always "Exportar seleccionadas (N)"
+  //   logged in, no selection → "Descargar lo nuevo (N)" or "Todo descargado"
+  //   not logged in, no selection → "Descargar todo"
+  let idleLabel;
+  let showSparkle = false;
+  if (hasSelection) {
+    idleLabel = `Exportar seleccionadas (${selectedCount})`;
+  } else if (isAuthenticated) {
+    if (newPublicationsCount > 0) {
+      idleLabel = `Descargar lo nuevo (${newPublicationsCount})`;
+      showSparkle = true;
+    } else {
+      idleLabel = "Todo descargado";
+    }
+  } else {
+    idleLabel = "Descargar todo";
+  }
 
   return (
     <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        disabled={isBusy}
+        disabled={isBusy || (isAuthenticated && !hasSelection && newPublicationsCount === 0)}
         className="inline-flex items-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-[18px] py-2.5 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {isBusy ? <Spinner size={15} /> : <DownloadIcon />}
+        {isBusy ? (
+          <Spinner size={15} />
+        ) : showSparkle ? (
+          <SparkleIcon size={15} className="text-brand-accent" />
+        ) : (
+          <DownloadIcon />
+        )}
         {isBusy
           ? `Exportando ${exportingFormat.toUpperCase()}...`
           : idleLabel}

@@ -1,31 +1,54 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppHeader } from "../components/layout/AppHeader";
-import { DocumentIcon } from "../components/ui/Icons";
+import { DocumentIcon, UsersIcon } from "../components/ui/Icons";
 import { OrcidLogo } from "../components/ui/OrcidLogo";
 import { Spinner } from "../components/ui/Spinner";
 import { formatOrcidInput, isValidOrcid } from "../utils/orcid";
-import { searchResearcher } from "../services/api";
+import { getOrcidAuthorizeUrl, searchResearcher } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { AUTH_MESSAGE_TYPE, AUTH_ERROR_TYPE } from "../contexts/AuthContext";
+
+// When VITE_AUTH_BYPASS=true, skip the real OAuth popup and simulate login
+// with the ORCID entered in the text field. Use only in development.
+const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true";
 
 /**
- * Entry view: OAuth button + manual ORCID iD entry.
+ * Entry view: login con ORCID iD + búsqueda individual anónima +
+ * buscador grupal para múltiples investigadores.
  *
- * El endpoint de búsqueda grupal `POST /api/researchers/search` (usado
- * para 1 solo ORCID) es "todo en uno":
- * valida el formato + dígito de control en el servidor, lo crea en BD si
- * no existe, sincroniza con ORCID y devuelve `researcher + publications`.
- * Por eso aquí basta con una sola llamada y, una vez que tenemos el
- * bundle, navegamos al dashboard pasándoselo por `state` para evitar
- * la doble petición.
+ * Flujo de login:
+ *   - Modo normal:   abre popup OAuth → sandbox.orcid.org → /auth/callback
+ *                    → JWT → cierra popup → estado actualizado aquí.
+ *   - VITE_AUTH_BYPASS=true (solo dev): genera un token simulado con el
+ *     ORCID del campo de texto, sin tocar el backend de auth.
  */
 export function LandingPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, storeToken } = useAuth();
+
   const [orcidInput, setOrcidInput] = useState("");
   const [error, setError] = useState("");
   const [validating, setValidating] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // Group search state
+  const [groupInput, setGroupInput] = useState("");
+  const [groupError, setGroupError] = useState("");
+  const [groupLoading, setGroupLoading] = useState(false);
+
+  // Cleanup refs for popup polling interval
+  const popupRef = useRef(null);
+  const popupTimerRef = useRef(null);
+
+  // Clean up popup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (popupTimerRef.current) clearInterval(popupTimerRef.current);
+    };
+  }, []);
 
   function handleOrcidChange(event) {
     setOrcidInput(formatOrcidInput(event.target.value));
@@ -44,7 +67,7 @@ export function LandingPage() {
       const bundle = await searchResearcher(orcidInput);
       navigate(`/dashboard/${orcidInput}`, { state: { bundle } });
     } catch (err) {
-      toast.error("No se pudo validar el ORCID iD", {
+      toast.error("No se pudo buscar el ORCID iD", {
         description: err?.message ?? "Inténtalo de nuevo en unos segundos.",
       });
     } finally {
@@ -52,24 +75,117 @@ export function LandingPage() {
     }
   }
 
-  async function handleOrcidLogin() {
-    setOauthLoading(true);
-    try {
-      // Real implementation will redirect to ORCID OAuth (handled by backend).
-      // For now we emulate the flow locally with a known sample ORCID.
-      await new Promise((r) => setTimeout(r, 800));
-      navigate(`/dashboard/0000-0002-1234-5678`);
-    } catch (err) {
-      toast.error("No se pudo iniciar sesión con ORCID", {
-        description: err?.message ?? "Inténtalo de nuevo.",
+  function handleOrcidLogin() {
+    // ── Modo bypass (solo desarrollo / sandbox sin credenciales OAuth) ──
+    if (AUTH_BYPASS) {
+      if (!isValidOrcid(orcidInput)) {
+        setError(
+          "Introduce un ORCID iD válido para simular el login (modo bypass).",
+        );
+        return;
+      }
+      // Genera un token simulado (no válido en el backend) solo para
+      // probar la UI en estado autenticado.
+      storeToken(`bypass_token_${orcidInput}`);
+      toast.success("Login simulado (modo bypass)", {
+        description: `Sesión activa para ${orcidInput}. El backend no reconocerá este token.`,
       });
+      return;
+    }
+
+    // ── Flujo OAuth real (popup) ──
+    setLoginLoading(true);
+
+    const authorizeUrl = getOrcidAuthorizeUrl();
+    const popup = window.open(
+      authorizeUrl,
+      "orcid_oauth",
+      "width=600,height=700,scrollbars=yes,resizable=yes",
+    );
+
+    if (!popup || popup.closed) {
+      // El navegador bloqueó el popup → hacemos redirect completo
+      setLoginLoading(false);
+      window.location.href = authorizeUrl;
+      return;
+    }
+
+    popupRef.current = popup;
+
+    // Escuchamos el postMessage que AuthCallbackPage envía al completar
+    function handleMessage(event) {
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data?.type === AUTH_MESSAGE_TYPE) {
+        cleanup();
+        setLoginLoading(false);
+        toast.success("Sesión iniciada con ORCID", {
+          description: "Ya puedes ver qué publicaciones son nuevas para ti.",
+        });
+      } else if (event.data?.type === AUTH_ERROR_TYPE) {
+        cleanup();
+        setLoginLoading(false);
+        toast.error("No se pudo iniciar sesión", {
+          description: event.data.error ?? "Inténtalo de nuevo.",
+        });
+      }
+    }
+
+    window.addEventListener("message", handleMessage);
+
+    // Detectamos si el usuario cierra el popup manualmente antes de autenticar
+    popupTimerRef.current = setInterval(() => {
+      if (popup.closed) {
+        cleanup();
+        setLoginLoading(false);
+      }
+    }, 500);
+
+    function cleanup() {
+      window.removeEventListener("message", handleMessage);
+      if (popupTimerRef.current) {
+        clearInterval(popupTimerRef.current);
+        popupTimerRef.current = null;
+      }
+    }
+  }
+
+  function parseGroupOrcids(raw) {
+    return raw
+      .split(/[\s,\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  async function handleGroupSearch() {
+    const ids = parseGroupOrcids(groupInput);
+    if (ids.length === 0) {
+      setGroupError("Introduce al menos un ORCID iD.");
+      return;
+    }
+    const invalid = ids.filter((id) => !isValidOrcid(id));
+    if (invalid.length > 0) {
+      setGroupError(`ORCID iDs con formato incorrecto: ${invalid.join(", ")}`);
+      return;
+    }
+    setGroupError("");
+    setGroupLoading(true);
+    try {
+      navigate("/group", { state: { orcidIds: ids } });
     } finally {
-      setOauthLoading(false);
+      setGroupLoading(false);
     }
   }
 
   function handleKeyDown(event) {
     if (event.key === "Enter") handleValidate();
+  }
+
+  function handleGroupKeyDown(event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleGroupSearch();
+    }
   }
 
   return (
@@ -94,22 +210,41 @@ export function LandingPage() {
 
           {/* Main card */}
           <div className="rounded-2xl border border-surface-border/60 bg-surface-primary p-8">
-            <button
-              type="button"
-              onClick={handleOrcidLogin}
-              disabled={oauthLoading}
-              className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-orcid-green px-5 py-3 text-[15px] font-semibold tracking-wide text-orcid-green-dark transition-opacity enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-75"
-            >
-              {oauthLoading ? <Spinner size={17} /> : <OrcidLogo />}
-              {oauthLoading
-                ? "Redirigiendo a ORCID..."
-                : "Iniciar sesión con ORCID"}
-            </button>
+            {isAuthenticated ? (
+              <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
+                <span className="font-medium">Sesión activa</span>
+                <span className="text-xs text-green-600">
+                  Verás publicaciones nuevas marcadas en el dashboard
+                </span>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleOrcidLogin}
+                  disabled={loginLoading}
+                  className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-orcid-green px-5 py-3 text-[15px] font-semibold tracking-wide text-orcid-green-dark transition-opacity enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-75"
+                >
+                  {loginLoading ? <Spinner size={17} /> : <OrcidLogo />}
+                  {loginLoading
+                    ? "Abriendo ventana de ORCID..."
+                    : AUTH_BYPASS
+                    ? "Simular login (bypass)"
+                    : "Iniciar sesión con ORCID"}
+                </button>
+                {AUTH_BYPASS && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-700">
+                    Modo bypass activo — introduce un ORCID abajo y pulsa el botón.
+                    No se valida contra el backend.
+                  </p>
+                )}
+              </>
+            )}
 
             <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-surface-border" />
               <span className="text-xs tracking-widest text-ink-tertiary">
-                O INTRODUCE TU ORCID iD
+                {isAuthenticated ? "TU ORCID iD" : "O INTRODUCE TU ORCID iD"}
               </span>
               <div className="h-px flex-1 bg-surface-border" />
             </div>
@@ -141,7 +276,7 @@ export function LandingPage() {
                 <button
                   type="button"
                   onClick={handleValidate}
-                  disabled={validating || !orcidInput}
+                  disabled={validating || loginLoading || !orcidInput}
                   className={`inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${
                     orcidInput
                       ? "bg-brand-primary text-white enabled:hover:bg-brand-primary-hover"
@@ -158,10 +293,59 @@ export function LandingPage() {
                 </p>
               )}
               <p className="mt-2 text-xs text-ink-tertiary">
-                Formato: 16 dígitos separados con guiones (ej.
-                0000-0002-1234-5678)
+                {isAuthenticated
+                  ? "Busca un investigador o usa «Cerrar sesión» arriba."
+                  : AUTH_BYPASS
+                  ? "Introduce tu ORCID y pulsa «Simular login» para probar la UI autenticada."
+                  : "Pulsa «Iniciar sesión» para autenticarte, o «Buscar» de forma anónima."}
               </p>
             </div>
+          </div>
+
+          {/* Group search card */}
+          <div className="mt-4 rounded-2xl border border-surface-border/60 bg-surface-primary p-6">
+            <div className="mb-3 flex items-center gap-2">
+              <UsersIcon size={17} className="text-brand-accent" />
+              <h2 className="text-[14px] font-semibold text-ink-primary">
+                Búsqueda grupal de investigadores
+              </h2>
+            </div>
+            <p className="mb-3 text-xs leading-relaxed text-ink-secondary">
+              Pega varios ORCID iDs separados por comas, espacios o saltos de
+              línea para buscar y comparar varios investigadores a la vez.
+            </p>
+            <textarea
+              rows={3}
+              placeholder={"0000-0002-1825-0097\n0000-0001-5000-0007, 0000-0003-4321-9876"}
+              value={groupInput}
+              onChange={(e) => {
+                setGroupInput(e.target.value);
+                if (groupError) setGroupError("");
+              }}
+              onKeyDown={handleGroupKeyDown}
+              className={`w-full resize-none rounded-lg border px-3.5 py-2.5 font-mono text-[13px] text-ink-primary outline-none transition-colors ${
+                groupError
+                  ? "border-border-danger"
+                  : "border-surface-border-strong focus:border-brand-accent"
+              }`}
+            />
+            {groupError && (
+              <p className="mt-1 text-xs text-ink-danger">{groupError}</p>
+            )}
+            <button
+              type="button"
+              onClick={handleGroupSearch}
+              disabled={groupLoading || !groupInput.trim()}
+              className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${
+                groupInput.trim()
+                  ? "bg-brand-primary text-white enabled:hover:bg-brand-primary-hover"
+                  : "bg-surface-secondary text-ink-tertiary"
+              } disabled:cursor-not-allowed`}
+            >
+              {groupLoading && <Spinner size={14} />}
+              <UsersIcon size={14} />
+              {groupLoading ? "Preparando..." : "Buscar investigadores"}
+            </button>
           </div>
 
           {/* Info chips */}

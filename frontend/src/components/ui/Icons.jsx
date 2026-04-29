@@ -120,3 +120,39 @@ export function PackageIcon({ size = 18, className = "" }) {
     </svg>
   );
 }
+
+export function LogoutIcon({ size = 15, className = "" }) {
+  return (
+    <svg {...base} width={size} height={size} strokeWidth={2} className={className}>
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  );
+}
+
+export function UsersIcon({ size = 16, className = "" }) {
+  return (
+    <svg {...base} width={size} height={size} strokeWidth={1.8} className={className}>
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
+
+export function SparkleIcon({ size = 12, className = "" }) {
+  return (
+    <svg {...base} width={size} height={size} strokeWidth={2} className={className}>
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+    </svg>
+  );
+}
+
+export function UserCheckIcon({ size = 15, className = "" }) {
+  return (
+    <svg {...base} width={size} height={size} strokeWidth={1.8} className={className}>
+      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <polyline points="16 11 18 13 22 9" />
+    </svg>
+  );
+}

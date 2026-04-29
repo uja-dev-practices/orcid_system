@@ -50,8 +50,8 @@ export class ApiError extends Error {
 
 /**
  * Construye la cabecera base que llevan TODAS las peticiones (incluidas
- * las descargas de blob). Si la API key está sin definir lo avisamos en
- * consola para no fallar silenciosamente con un 401 críptico.
+ * las descargas de blob). Incluye X-API-Key siempre y, si existe un JWT
+ * en localStorage, también Authorization: Bearer <token>.
  */
 function buildAuthHeaders(extra = {}) {
   if (!API_KEY && import.meta.env.DEV) {
@@ -59,9 +59,11 @@ function buildAuthHeaders(extra = {}) {
       "[api] VITE_API_KEY no está definida; las peticiones serán rechazadas por el backend.",
     );
   }
+  const token = localStorage.getItem("orcid_auth_token");
   return {
     Accept: "application/json",
     ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...extra,
   };
 }
@@ -143,6 +145,8 @@ function normalizePublication(p) {
     hash_fingerprint: p.hash_fingerprint ?? null,
     last_modified: p.last_modified ?? null,
     status: p.status ?? null,
+    // null when request was made without a JWT (user not logged in)
+    downloaded_by_me: p.downloaded_by_me ?? null,
   };
 }
 
@@ -174,6 +178,38 @@ function normalizeResearcherBundle(raw) {
     unchangedRecords: raw.unchanged_records ?? 0,
     totalRecords: raw.total_records ?? publications.length,
   };
+}
+
+/* ───────────────────────────── Auth ─────────────────────────────── */
+
+/**
+ * URL a la que debe redirigirse (o abrirse en popup) para iniciar el
+ * flujo OAuth 3-legged de ORCID.
+ *
+ * Secuencia completa:
+ *   1. Frontend abre/redirige a GET /api/auth/orcid/authorize
+ *   2. Backend construye la URL de ORCID y redirige al navegador.
+ *   3. El usuario se autentica en orcid.org (o sandbox.orcid.org).
+ *   4. ORCID redirige a ORCID_REDIRECT_URI (debe apuntar a la página
+ *      /auth/callback del frontend).
+ *   5. El frontend extrae el `code` y llama a exchangeOrcidCode(code).
+ *   6. El backend intercambia el code → access_token y lo devuelve.
+ */
+export function getOrcidAuthorizeUrl() {
+  return `${BASE_URL}/auth/orcid/authorize`;
+}
+
+/**
+ * GET /auth/orcid/callback?code=<code>
+ *
+ * Intercambia el authorization code (recibido de ORCID tras el OAuth)
+ * por un JWT propio del backend. Devuelve `{ access_token, token_type }`.
+ */
+export async function exchangeOrcidCode(code, { signal } = {}) {
+  return request(
+    `/auth/orcid/callback?${new URLSearchParams({ code }).toString()}`,
+    { signal },
+  );
 }
 
 /* ───────────────────────────── Endpoints ─────────────────────────────── */
