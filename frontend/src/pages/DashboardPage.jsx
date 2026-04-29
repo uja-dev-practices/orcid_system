@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -14,24 +14,27 @@ import {
   syncResearcher,
 } from "../services/api";
 import { isValidOrcid } from "../utils/orcid";
+import { useAuth } from "../contexts/AuthContext";
 
 const SUCCESS_FLASH_MS = 3000;
 
 /**
  * Researcher detail page. Owns:
- *   - Carga inicial vía `searchResearcher` (todo en uno: researcher +
- *     publications + resumen de cambios). Si llegamos desde la landing
+ *   - Carga inicial vía `searchResearcher`. Si llegamos desde la landing
  *     usamos el bundle ya cargado en `location.state` para evitar
  *     duplicar la petición.
  *   - Re-sync manual (POST + actualización de estado in-place + toast).
- *   - Exportación SWORD/ZIP (selectiva si hay selección, masiva si no).
+ *   - Exportación SWORD/ZIP:
+ *       · Si hay selección manual → exporta esos IDs.
+ *       · Si el usuario está autenticado y sin selección → exporta solo
+ *         los IDs con downloaded_by_me=false ("lo nuevo").
+ *       · Si no está autenticado y sin selección → exporta todo.
  */
 export function DashboardPage() {
   const { orcid } = useParams();
   const location = useLocation();
-  // El bundle del Landing solo lo consumimos UNA vez: la primera vez
-  // que se monta el componente. Si el usuario refresca, navega o vuelve
-  // atrás, queremos que se vuelva a pedir al backend.
+  const { isAuthenticated } = useAuth();
+
   const initialBundleRef = useRef(location.state?.bundle ?? null);
 
   const initialBundle = initialBundleRef.current;
@@ -47,11 +50,17 @@ export function DashboardPage() {
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
-  /**
-   * Carga (o recarga) el bundle completo del investigador. Centralizamos
-   * la lógica aquí para que tanto el `useEffect` inicial como el botón
-   * "Reintentar" del estado de error compartan código.
-   */
+  // IDs de publicaciones que el usuario no ha descargado todavía
+  const newPublicationIds = useMemo(
+    () =>
+      isAuthenticated
+        ? publications
+            .filter((p) => p.downloaded_by_me === false)
+            .map((p) => p.id)
+        : [],
+    [publications, isAuthenticated],
+  );
+
   const loadBundle = useCallback(
     async (signal) => {
       setPubsLoading(true);
@@ -61,8 +70,6 @@ export function DashboardPage() {
         if (signal?.aborted) return;
         setResearcher(bundle.researcher);
         setPublications(bundle.publications);
-        // La selección sobrevive recargas: nos quedamos con los IDs que
-        // siguen existiendo tras el sync, descartamos los que no.
         setSelectedIds((prev) => {
           if (prev.size === 0) return prev;
           const alive = new Set(bundle.publications.map((p) => p.id));
@@ -85,9 +92,6 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!isValidOrcid(orcid)) return;
-    // Si venimos del Landing con el bundle precargado, evitamos la
-    // segunda petición y consumimos el ref para que un refresh sí pegue
-    // al backend.
     if (initialBundleRef.current) {
       initialBundleRef.current = null;
       return;
@@ -135,15 +139,32 @@ export function DashboardPage() {
   async function handleExport(format) {
     setExportingFormat(format);
     try {
-      const ids = Array.from(selectedIds);
+      let ids;
+      if (selectedIds.size > 0) {
+        // Manual selection takes priority
+        ids = Array.from(selectedIds);
+      } else if (isAuthenticated) {
+        // Authenticated → only download publications not yet downloaded by me
+        ids = newPublicationIds;
+        if (ids.length === 0) {
+          toast.info("No hay publicaciones nuevas", {
+            description: "Ya has descargado todas las publicaciones de este investigador.",
+          });
+          setExportingFormat(null);
+          return;
+        }
+      } else {
+        // Anonymous → download everything
+        ids = undefined;
+      }
+
       const { blob } = await downloadExport(orcid, format, {
-        publicationIds: ids.length > 0 ? ids : undefined,
+        publicationIds: ids,
       });
       if (blob) {
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        // Usamos extensiones reales: el endpoint SWORD devuelve XML.
         const extension = format === "xml" ? "xml" : format;
         anchor.download = `sword-${orcid}.${extension}`;
         document.body.appendChild(anchor);
@@ -151,10 +172,15 @@ export function DashboardPage() {
         anchor.remove();
         URL.revokeObjectURL(objectUrl);
       }
-      const scope =
-        ids.length > 0
-          ? `${ids.length} publicación${ids.length === 1 ? "" : "es"} seleccionada${ids.length === 1 ? "" : "s"}`
-          : "todo el investigador";
+
+      let scope;
+      if (selectedIds.size > 0) {
+        scope = `${selectedIds.size} publicación${selectedIds.size === 1 ? "" : "es"} seleccionada${selectedIds.size === 1 ? "" : "s"}`;
+      } else if (isAuthenticated) {
+        scope = `${newPublicationIds.length} publicación${newPublicationIds.length === 1 ? "" : "es"} nueva${newPublicationIds.length === 1 ? "" : "s"}`;
+      } else {
+        scope = "todo el investigador";
+      }
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
         description: scope,
       });
@@ -182,6 +208,8 @@ export function DashboardPage() {
                   onExport={handleExport}
                   exportingFormat={exportingFormat}
                   selectedCount={selectedIds.size}
+                  isAuthenticated={isAuthenticated}
+                  newPublicationsCount={newPublicationIds.length}
                 />
               </>
             }
@@ -199,6 +227,7 @@ export function DashboardPage() {
           onRetry={() => loadBundle()}
           selectedIds={selectedIds}
           onSelectedIdsChange={setSelectedIds}
+          isAuthenticated={isAuthenticated}
         />
 
         <footer className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
