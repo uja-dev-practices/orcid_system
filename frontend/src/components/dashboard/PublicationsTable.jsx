@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertIcon, ChevronDownIcon, FilterIcon, SearchIcon } from "../ui/Icons";
+import { AlertIcon, ChevronDownIcon, FilterIcon, SearchIcon, SparkleIcon } from "../ui/Icons";
 import { Spinner } from "../ui/Spinner";
 import { Badge } from "../ui/Badge";
 
@@ -83,6 +83,7 @@ export function PublicationsTable({
   onRetry,
   selectedIds = EMPTY_SELECTION,
   onSelectedIdsChange,
+  isAuthenticated = false,
 }) {
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState("publication_year");
@@ -447,7 +448,18 @@ export function PublicationsTable({
                         />
                       </td>
                       <td className="max-w-[280px] px-4 py-3.5 text-[13px] font-medium leading-relaxed text-ink-primary">
-                        {pub.title}
+                        <span className="flex flex-wrap items-start gap-1.5">
+                          {isAuthenticated && pub.downloaded_by_me === false && (
+                            <span
+                              title="No descargada aún por ti"
+                              className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-accent"
+                            >
+                              <SparkleIcon size={9} />
+                              Nuevo
+                            </span>
+                          )}
+                          {pub.title}
+                        </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-ink-secondary">
                         {pub.journal || "—"}

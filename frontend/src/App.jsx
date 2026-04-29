@@ -1,8 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 
+import { AuthProvider } from "./contexts/AuthContext";
 import { LandingPage } from "./pages/LandingPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { GroupResultsPage } from "./pages/GroupResultsPage";
+import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 
 /**
  * App shell. Declares the top-level routes and mounts the global
@@ -11,10 +14,12 @@ import { DashboardPage } from "./pages/DashboardPage";
  */
 export default function App() {
   return (
-    <>
+    <AuthProvider>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard/:orcid" element={<DashboardPage />} />
+        <Route path="/group" element={<GroupResultsPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
@@ -25,6 +30,6 @@ export default function App() {
         theme="light"
         toastOptions={{ duration: 4000 }}
       />
-    </>
+    </AuthProvider>
   );
 }
