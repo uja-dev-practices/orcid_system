@@ -16,6 +16,19 @@ export const AUTH_ERROR_TYPE = "ORCID_AUTH_ERROR";
 
 const AuthContext = createContext(null);
 
+function extractOrcidFromToken(token) {
+  if (!token) return null;
+  try {
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) return null;
+    const payloadJson = atob(payloadBase64.replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(payloadJson);
+    return payload?.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Provides JWT-based authentication state throughout the app.
  *
@@ -30,8 +43,6 @@ const AuthContext = createContext(null);
  *      opener and closes itself.
  *   7. This provider's message listener stores the token and updates state.
  *
- * For development / sandbox bypass (VITE_AUTH_BYPASS=true), the token is
- * stored directly via storeToken() without going through ORCID.
  */
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY));
@@ -53,7 +64,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
-   * Stores a JWT directly (used by AuthCallbackPage and bypass mode).
+   * Stores a JWT directly (used by AuthCallbackPage).
    * Does NOT trigger any network request.
    */
   const storeToken = useCallback((accessToken) => {
@@ -67,7 +78,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ token, isAuthenticated: Boolean(token), storeToken, logout }),
+    () => ({
+      token,
+      isAuthenticated: Boolean(token),
+      userOrcidId: extractOrcidFromToken(token),
+      storeToken,
+      logout,
+    }),
     [token, storeToken, logout],
   );
 

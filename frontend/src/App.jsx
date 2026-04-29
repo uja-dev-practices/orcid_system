@@ -19,7 +19,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard/:orcid" element={<DashboardPage />} />
         <Route path="/group" element={<GroupResultsPage />} />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="/callback" element={<AuthCallbackPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
