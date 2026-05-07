@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       host: true,
+      // Needed for HTTPS tunnels like ngrok during OAuth callback flows.
+      // We allow all hosts in dev to avoid host-blocking when ngrok URL rotates.
+      allowedHosts: true,
       port: 5173,
       proxy: {
         // El backend agrupa todo bajo /api (researchers, export, …).

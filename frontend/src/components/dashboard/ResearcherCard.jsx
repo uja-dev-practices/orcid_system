@@ -8,15 +8,16 @@ import { formatDate, getInitials } from "../../utils/formatters";
  * Export buttons without coupling this component to API logic.
  */
 export function ResearcherCard({ researcher, actions = null }) {
+  const title = researcher.name || researcher.orcid_id || "Perfil ORCID";
   return (
     <section className="mb-5 flex flex-wrap items-start gap-5 rounded-2xl border border-surface-border/60 bg-surface-primary px-7 py-6">
       <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-primary text-xl font-semibold text-white">
-        {getInitials(researcher.name)}
+        {getInitials(title)}
       </div>
 
       <div className="min-w-[200px] flex-1">
         <h2 className="mb-1 text-[22px] font-semibold text-ink-primary">
-          {researcher.name || "Investigador sin nombre"}
+          {title}
         </h2>
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="inline-flex items-center gap-1.5">
