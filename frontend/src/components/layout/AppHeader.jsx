@@ -1,18 +1,16 @@
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeftIcon, LayersIcon, LogoutIcon, UserCheckIcon } from "../ui/Icons";
+import { LogoutIcon, UserCheckIcon } from "../ui/Icons";
 import { useAuth } from "../../contexts/AuthContext";
 
 /**
  * Institutional navy header used across all views.
  *
- * Variants:
- *   - `landing`   → logo + full product name.
- *   - `dashboard` → back button to `/` + auth indicator + logout (if logged in).
- *   - `group`     → back button to `/` + group label + auth indicator.
+ * Brand: ORCID2SWORD — "2" in orcid-green, rest in white.
+ * Authenticated users see their name (or "Mi Perfil") + logout button.
  */
 export function AppHeader({ variant = "landing" }) {
-  const { isAuthenticated, userOrcidId, logout } = useAuth();
+  const { isAuthenticated, userOrcidId, userName, logout } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -23,82 +21,42 @@ export function AppHeader({ variant = "landing" }) {
     navigate("/");
   }
 
-  if (variant === "dashboard" || variant === "group") {
-    return (
-      <header className="flex h-14 items-center gap-4 bg-brand-primary px-7 text-white">
+  const profileLabel = userName ?? "Mi Perfil";
+  const profileHref = userOrcidId ? `/dashboard/${userOrcidId}` : "/";
+
+  return (
+    <header className="bg-brand-primary">
+      <div className="mx-auto flex h-14 max-w-7xl items-center px-4">
+        {/* Brand — always navigates home */}
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
+          className="text-[15px] font-bold tracking-tight text-white transition-opacity hover:opacity-90"
         >
-          <ArrowLeftIcon />
-          Inicio
+          ORCID<span className="text-orcid-green">2</span>SWORD
         </Link>
+
         <div className="flex-1" />
+
         {isAuthenticated && (
-          <div className="flex items-center gap-3">
-            {userOrcidId && (
-              <Link
-                to={`/dashboard/${userOrcidId}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
-              >
-                <UserCheckIcon size={13} />
-                Mi perfil
-              </Link>
-            )}
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12px] text-white/80">
+          <div className="flex items-center gap-2">
+            <Link
+              to={profileHref}
+              className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-3 py-1.5 text-[13px] text-white transition-colors hover:bg-white/20"
+            >
               <UserCheckIcon size={13} />
-              Sesión activa
-            </span>
+              {profileLabel}
+            </Link>
             <button
               type="button"
               onClick={handleLogout}
-              className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
+              className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-3 py-1.5 text-[13px] text-white transition-colors hover:bg-white/20"
             >
               <LogoutIcon />
               Cerrar sesión
             </button>
           </div>
         )}
-        <span className="text-[13px] text-white/60">
-          {variant === "group" ? "Búsqueda grupal · ORCID" : "Sistema ORCID · SWORD"}
-        </span>
-      </header>
-    );
-  }
-
-  return (
-    <header className="flex items-center gap-3 bg-brand-primary px-8 py-3.5">
-      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/15 text-white">
-        <LayersIcon />
       </div>
-      <span className="text-sm font-medium tracking-wide text-white">
-        Sistema de Integración ORCID · SWORD
-      </span>
-      {isAuthenticated && (
-        <div className="ml-auto flex items-center gap-2">
-          {userOrcidId && (
-            <Link
-              to={`/dashboard/${userOrcidId}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
-            >
-              <UserCheckIcon size={13} />
-              Mi perfil
-            </Link>
-          )}
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12px] text-white/80">
-            <UserCheckIcon size={13} />
-            Sesión activa
-          </span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
-          >
-            <LogoutIcon />
-            Cerrar sesión
-          </button>
-        </div>
-      )}
     </header>
   );
 }
