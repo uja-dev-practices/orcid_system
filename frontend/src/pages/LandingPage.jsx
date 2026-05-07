@@ -11,23 +11,17 @@ import { getOrcidAuthorizeUrl, searchResearcher } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { AUTH_MESSAGE_TYPE, AUTH_ERROR_TYPE } from "../contexts/AuthContext";
 
-// When VITE_AUTH_BYPASS=true, skip the real OAuth popup and simulate login
-// with the ORCID entered in the text field. Use only in development.
-const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true";
-
 /**
  * Entry view: login con ORCID iD + búsqueda individual anónima +
  * buscador grupal para múltiples investigadores.
  *
  * Flujo de login:
- *   - Modo normal:   abre popup OAuth → sandbox.orcid.org → /auth/callback
- *                    → JWT → cierra popup → estado actualizado aquí.
- *   - VITE_AUTH_BYPASS=true (solo dev): genera un token simulado con el
- *     ORCID del campo de texto, sin tocar el backend de auth.
+ *   - abre popup OAuth → sandbox.orcid.org → /callback
+ *   - recibe JWT → cierra popup → estado actualizado aquí.
  */
 export function LandingPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, storeToken } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   const [orcidInput, setOrcidInput] = useState("");
   const [error, setError] = useState("");
@@ -76,24 +70,6 @@ export function LandingPage() {
   }
 
   function handleOrcidLogin() {
-    // ── Modo bypass (solo desarrollo / sandbox sin credenciales OAuth) ──
-    if (AUTH_BYPASS) {
-      if (!isValidOrcid(orcidInput)) {
-        setError(
-          "Introduce un ORCID iD válido para simular el login (modo bypass).",
-        );
-        return;
-      }
-      // Genera un token simulado (no válido en el backend) solo para
-      // probar la UI en estado autenticado.
-      storeToken(`bypass_token_${orcidInput}`);
-      toast.success("Login simulado (modo bypass)", {
-        description: `Sesión activa para ${orcidInput}. El backend no reconocerá este token.`,
-      });
-      return;
-    }
-
-    // ── Flujo OAuth real (popup) ──
     setLoginLoading(true);
 
     const authorizeUrl = getOrcidAuthorizeUrl();
@@ -228,16 +204,8 @@ export function LandingPage() {
                   {loginLoading ? <Spinner size={17} /> : <OrcidLogo />}
                   {loginLoading
                     ? "Abriendo ventana de ORCID..."
-                    : AUTH_BYPASS
-                    ? "Simular login (bypass)"
                     : "Iniciar sesión con ORCID"}
                 </button>
-                {AUTH_BYPASS && (
-                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-700">
-                    Modo bypass activo — introduce un ORCID abajo y pulsa el botón.
-                    No se valida contra el backend.
-                  </p>
-                )}
               </>
             )}
 
@@ -295,8 +263,6 @@ export function LandingPage() {
               <p className="mt-2 text-xs text-ink-tertiary">
                 {isAuthenticated
                   ? "Busca un investigador o usa «Cerrar sesión» arriba."
-                  : AUTH_BYPASS
-                  ? "Introduce tu ORCID y pulsa «Simular login» para probar la UI autenticada."
                   : "Pulsa «Iniciar sesión» para autenticarte, o «Buscar» de forma anónima."}
               </p>
             </div>

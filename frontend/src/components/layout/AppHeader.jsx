@@ -12,7 +12,7 @@ import { useAuth } from "../../contexts/AuthContext";
  *   - `group`     → back button to `/` + group label + auth indicator.
  */
 export function AppHeader({ variant = "landing" }) {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, userOrcidId, logout } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -36,6 +36,15 @@ export function AppHeader({ variant = "landing" }) {
         <div className="flex-1" />
         {isAuthenticated && (
           <div className="flex items-center gap-3">
+            {userOrcidId && (
+              <Link
+                to={`/dashboard/${userOrcidId}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
+              >
+                <UserCheckIcon size={13} />
+                Mi perfil
+              </Link>
+            )}
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12px] text-white/80">
               <UserCheckIcon size={13} />
               Sesión activa
@@ -67,6 +76,15 @@ export function AppHeader({ variant = "landing" }) {
       </span>
       {isAuthenticated && (
         <div className="ml-auto flex items-center gap-2">
+          {userOrcidId && (
+            <Link
+              to={`/dashboard/${userOrcidId}`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1.5 text-[13px] transition-colors hover:bg-white/20"
+            >
+              <UserCheckIcon size={13} />
+              Mi perfil
+            </Link>
+          )}
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[12px] text-white/80">
             <UserCheckIcon size={13} />
             Sesión activa
