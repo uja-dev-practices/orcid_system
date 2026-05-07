@@ -29,6 +29,21 @@ function extractOrcidFromToken(token) {
   }
 }
 
+function extractNameFromToken(token) {
+  if (!token) return null;
+  try {
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) return null;
+    const payloadJson = atob(payloadBase64.replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(payloadJson);
+    if (payload?.name) return payload.name;
+    const parts = [payload?.given_name, payload?.family_name].filter(Boolean);
+    return parts.length > 0 ? parts.join(" ") : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Provides JWT-based authentication state throughout the app.
  *
@@ -82,6 +97,7 @@ export function AuthProvider({ children }) {
       token,
       isAuthenticated: Boolean(token),
       userOrcidId: extractOrcidFromToken(token),
+      userName: extractNameFromToken(token),
       storeToken,
       logout,
     }),
