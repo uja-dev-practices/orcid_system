@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Design tokens — Institutional palette (ORCID · UJA)
+ * ─────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Brand (institutional navy) */
+  --color-brand-primary: #0B3D6B;
+  --color-brand-primary-hover: #0a345c;
+  --color-brand-accent: #185FA5;
+
+  /* ORCID brand */
+  --color-orcid-green: #A6CE39;
+  --color-orcid-green-dark: #2A3D00;
+  --color-orcid-green-soft: #EAF3DE;
+  --color-orcid-green-border: #C0DD97;
+  --color-orcid-green-text: #3B6D11;
+
+  /* Surfaces (clean neutrals) */
+  --color-surface-primary: #FFFFFF;
+  --color-surface-secondary: #F6F5F0;
+  --color-surface-tertiary: #FAF9F5;
+  --color-surface-border: #E4E2D8;
+  --color-surface-border-strong: #CDCAB9;
+
+  /* Text */
+  --color-ink-primary: #1F1F1C;
+  --color-ink-secondary: #55534B;
+  --color-ink-tertiary: #8B887C;
+  --color-ink-danger: #B42318;
+  --color-border-danger: #F97066;
+
+  /* Type colours (publication badges) */
+  --color-tag-article-bg: #EBF5FF;
+  --color-tag-article-text: #1A5FA8;
+  --color-tag-article-border: #B5D4F4;
+
+  --color-tag-review-bg: #F0FFF4;
+  --color-tag-review-text: #1A6B3A;
+  --color-tag-review-border: #9FE1CB;
+
+  --color-tag-conference-bg: #FFF8E6;
+  --color-tag-conference-text: #7A4A00;
+  --color-tag-conference-border: #FAC775;
+
+  --color-tag-book-bg: #F5F0FF;
+  --color-tag-book-text: #4B30A8;
+  --color-tag-book-border: #C5BCEE;
+
+  --color-tag-dataset-bg: #FFF0F5;
+  --color-tag-dataset-text: #8B2252;
+  --color-tag-dataset-border: #F4C0D1;
+
+  --color-tag-default-bg: #F1EFE8;
+  --color-tag-default-text: #5F5E5A;
+  --color-tag-default-border: #D3D1C7;
+
+  /* Fonts */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink-primary);
+  background: var(--color-surface-tertiary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
