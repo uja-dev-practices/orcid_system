@@ -148,3 +148,50 @@ def get_works_summary(orcid_id: str) -> dict:
 def get_work_detail(orcid_id: str, put_code: int) -> dict | None:
     client = ORCIDClient()
     return client.fetch_work_detail(orcid_id, put_code)
+
+
+def get_record(orcid_id: str) -> dict:
+    client = ORCIDClient()
+    return client.fetch_record(orcid_id)
+
+
+def extract_display_name(record: dict | None) -> str | None:
+    """
+    Devuelve un nombre legible a partir de la respuesta de `/record` de ORCID.
+
+    Prioriza `credit-name` (el nombre tal y como el investigador prefiere mostrarlo);
+    si no está disponible, compone `given-names` + `family-name`.
+    """
+    if not record:
+        return None
+
+    name = (record.get("person") or {}).get("name") or {}
+
+    credit = name.get("credit-name")
+    if isinstance(credit, dict):
+        credit_value = credit.get("value")
+        if credit_value:
+            return credit_value
+
+    given_obj = name.get("given-names")
+    family_obj = name.get("family-name")
+    given = given_obj.get("value") if isinstance(given_obj, dict) else None
+    family = family_obj.get("value") if isinstance(family_obj, dict) else None
+
+    full = " ".join(part for part in (given, family) if part)
+    return full or None
+
+
+def get_display_name(orcid_id: str) -> str | None:
+    """
+    Obtiene el nombre público del investigador desde ORCID.
+
+    Devuelve `None` (sin propagar la excepción) si la API de ORCID no responde
+    o el `record` no contiene un nombre utilizable, para no romper el flujo de
+    búsqueda cuando solo falla la resolución del nombre.
+    """
+    try:
+        record = get_record(orcid_id)
+    except Exception:
+        return None
+    return extract_display_name(record)
