@@ -15,7 +15,7 @@ from app.schema.researcher import (
     ResearcherWithPublicationsSchema,
 )
 from app.services.normalizer import PublicationNormalizer
-from app.services.orcid_client import get_works_summary, get_work_detail
+from app.services.orcid_client import get_display_name, get_works_summary, get_work_detail
 from app.schema.publication import PublicationSchema
 from app.db.models import PublicationDownload
 from app.security.jwt import get_optional_current_researcher
@@ -158,6 +158,16 @@ def build_search_response(orcid_id: str, db: Session, current: Researcher | None
         )
         db.add(researcher)
         db.flush()
+
+    # Si todavía no conocemos el nombre del investigador (por ejemplo, recién
+    # creado al sincronizarse desde el buscador), lo resolvemos contra el
+    # endpoint `/record` público de ORCID. No tocamos un nombre ya existente
+    # para no pisar valores establecidos por el flujo de autenticación.
+    if not researcher.name:
+        display_name = get_display_name(orcid_id)
+        if display_name:
+            researcher.name = display_name
+            db.flush()
 
     publications = _upsert_researcher_publications(researcher, orcid_id, db)
     publications_out = _decorate_downloaded_by_me(db=db, current=current, publications=publications)
