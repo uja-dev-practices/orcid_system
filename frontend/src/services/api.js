@@ -39,6 +39,38 @@ const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 
+const ORCID_PUBLIC_BASE =
+  import.meta.env.VITE_ORCID_PUBLIC_API_BASE ?? "https://pub.sandbox.orcid.org/v3.0";
+
+const nameCache = new Map();
+
+function extractDisplayNameFromOrcidRecord(record) {
+  const given = record?.person?.name?.["given-names"]?.value;
+  const family = record?.person?.name?.["family-name"]?.value;
+  const full = [given, family].filter(Boolean).join(" ").trim();
+  return full || null;
+}
+
+async function fetchOrcidDisplayName(orcidId, { signal } = {}) {
+  if (!orcidId) return null;
+  if (nameCache.has(orcidId)) return nameCache.get(orcidId);
+
+  const url = `${ORCID_PUBLIC_BASE.replace(/\/$/, "")}/${encodeURIComponent(orcidId)}/record`;
+  try {
+    const res = await fetch(url, { signal, headers: { Accept: "application/json" } });
+    if (!res.ok) {
+      nameCache.set(orcidId, null);
+      return null;
+    }
+    const json = await res.json();
+    const name = extractDisplayNameFromOrcidRecord(json);
+    nameCache.set(orcidId, name);
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 export class ApiError extends Error {
   constructor(message, { status, payload } = {}) {
     super(message);
@@ -98,6 +130,7 @@ async function request(path, { method = "GET", body, signal, headers } = {}) {
     } catch {
       /* sin cuerpo JSON */
     }
+
     const detail =
       payload?.detail ?? payload?.message ?? response.statusText ?? "Error";
     throw new ApiError(typeof detail === "string" ? detail : "Error de API", {
@@ -281,6 +314,18 @@ export async function searchResearchersBulk(orcidIds, { signal } = {}) {
   const results = Array.isArray(raw?.results)
     ? raw.results.map(normalizeResearcherBundle)
     : [];
+
+  // Frontend enrichment: backend may create researchers with `name=null`
+  // when discovered via search. We best-effort fill display name from
+  // ORCID Public API to keep UI consistent with OAuth login cases.
+  await Promise.all(
+    results.map(async (bundle) => {
+      const r = bundle?.researcher;
+      if (!r || r.name) return;
+      const name = await fetchOrcidDisplayName(r.orcid_id, { signal });
+      if (name) bundle.researcher = { ...r, name };
+    }),
+  );
 
   return {
     results,

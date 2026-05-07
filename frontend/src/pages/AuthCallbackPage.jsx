@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Spinner } from "../components/ui/Spinner";
@@ -8,7 +8,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { AUTH_MESSAGE_TYPE, AUTH_ERROR_TYPE } from "../contexts/AuthContext";
 
 /**
- * OAuth callback page — mounted at /auth/callback.
+ * OAuth callback page — mounted at /callback.
  *
  * ORCID redirects here after the user authenticates. We extract the
  * authorization `code`, exchange it for a JWT via the backend, store
@@ -16,8 +16,8 @@ import { AUTH_MESSAGE_TYPE, AUTH_ERROR_TYPE } from "../contexts/AuthContext";
  * close the window. Otherwise we navigate back to the landing page.
  *
  * For this page to be reached, the backend's ORCID_REDIRECT_URI env var
- * must be set to <frontend-origin>/auth/callback, e.g.:
- *   ORCID_REDIRECT_URI=http://localhost:5173/auth/callback
+ * must be set to <frontend-origin>/callback, e.g.:
+ *   ORCID_REDIRECT_URI=http://localhost:5173/callback
  */
 export function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
@@ -26,8 +26,15 @@ export function AuthCallbackPage() {
 
   const [status, setStatus] = useState("loading"); // loading | success | error
   const [errorMsg, setErrorMsg] = useState("");
+  const hasHandledCodeRef = useRef(false);
 
   useEffect(() => {
+    // React StrictMode may remount components in development. OAuth codes
+    // are single-use, so a second exchange attempt triggers backend errors.
+    // This in-memory guard handles duplicate effect runs in same mount.
+    if (hasHandledCodeRef.current) return;
+    hasHandledCodeRef.current = true;
+
     const code = searchParams.get("code");
     const oauthError = searchParams.get("error");
     const errorDescription = searchParams.get("error_description");
@@ -53,6 +60,15 @@ export function AuthCallbackPage() {
       return;
     }
 
+    // Persistent dedupe across remounts/reloads in the popup.
+    const consumedKey = `orcid_oauth_code_consumed:${code}`;
+    if (sessionStorage.getItem(consumedKey) === "1") {
+      setStatus("success");
+      notifyAndClose({ type: AUTH_MESSAGE_TYPE });
+      return;
+    }
+    sessionStorage.setItem(consumedKey, "1");
+
     exchangeOrcidCode(code)
       .then(({ access_token }) => {
         storeToken(access_token);
@@ -60,6 +76,9 @@ export function AuthCallbackPage() {
         notifyAndClose({ type: AUTH_MESSAGE_TYPE, token: access_token });
       })
       .catch((err) => {
+        // Allow re-trying if the first attempt failed before code exchange
+        // actually happened on the backend (network cut, popup close, etc.).
+        sessionStorage.removeItem(consumedKey);
         const msg = err?.message ?? "No se pudo completar el inicio de sesión.";
         setStatus("error");
         setErrorMsg(msg);
