@@ -17,7 +17,7 @@ from app.schema.researcher import (
     ResearcherStatsSchema,
     ResearcherWithPublicationsSchema,
 )
-from app.security.jwt import get_current_researcher, get_optional_current_researcher
+from app.security.jwt import get_optional_current_researcher
 from app.services.normalizer import PublicationNormalizer
 from app.services.orcid_client import get_display_name, get_work_detail, get_works_summary
 from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
@@ -184,22 +184,13 @@ def build_search_response(orcid_id: str, db: Session, current: Researcher | None
 # ENDPOINT 1: SEARCH + SYNC
 # ---------------------------------------------------------
 
-def _search_rate_limit(request: Request) -> str:
-    """
-    Aplica un límite distinto si el usuario está autenticado.
-    Como SlowAPI evalúa el decorador antes de las dependencias, devolvemos
-    el límite más restrictivo y subimos sólo si hay token (state.researcher).
-    """
-    researcher = getattr(request.state, "researcher", None)
-    return settings.RATE_LIMIT_SEARCH_AUTH if researcher else settings.RATE_LIMIT_SEARCH_ANON
-
 
 @router.post(
     "/search",
     response_model=ResearcherBatchSearchResponseSchema,
     response_model_exclude_none=True,
 )
-@limiter.limit(_search_rate_limit)
+@limiter.limit(settings.RATE_LIMIT_SEARCH_ANON)
 def search_and_sync_researchers(
     request: Request,
     payload: ResearcherBatchSearchRequestSchema,
@@ -261,7 +252,7 @@ def sync_researcher(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
     db: Session = Depends(get_db),
-    current: Researcher = Depends(get_current_researcher),
+    current: Researcher | None = Depends(get_optional_current_researcher),
 ):
     if not is_valid_orcid(orcid_id):
         raise HTTPException(status_code=400, detail="Invalid ORCID iD")

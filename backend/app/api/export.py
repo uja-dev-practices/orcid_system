@@ -63,6 +63,27 @@ def _validate_pub_ids(pub_ids: List[UUID]) -> List[UUID]:
     return pub_ids
 
 
+def _raise_clear_error_if_researcher_id_was_used(db: Session, pub_ids: List[UUID]) -> None:
+    """
+    Si el cliente envía por error el UUID de un investigador al endpoint
+    de publicaciones, devolvemos un mensaje explícito para guiar el uso.
+    """
+    if len(pub_ids) != 1:
+        return
+
+    researcher = db.query(Researcher).filter(Researcher.id == pub_ids[0]).first()
+    if researcher:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The provided UUID belongs to a researcher, not a publication. "
+                "Use publication IDs for this endpoint, or call "
+                f"/api/export/sword/researcher/{researcher.orcid_id} "
+                f"(or /api/export/zip/researcher/{researcher.orcid_id})."
+            ),
+        )
+
+
 # ---------------------------------------------------------
 # ENDPOINT 1: SWORD múltiples publicaciones
 # ---------------------------------------------------------
@@ -81,6 +102,7 @@ async def export_multiple_sword(
 
     pubs = db.query(Publication).filter(Publication.id.in_(pub_ids)).all()
     if not pubs:
+        _raise_clear_error_if_researcher_id_was_used(db, pub_ids)
         raise HTTPException(status_code=404, detail="No publications found")
 
     researcher = db.query(Researcher).filter_by(id=pubs[0].researcher_id).first()
@@ -142,6 +164,7 @@ async def export_multiple_zip(
 
     pubs = db.query(Publication).filter(Publication.id.in_(pub_ids)).all()
     if not pubs:
+        _raise_clear_error_if_researcher_id_was_used(db, pub_ids)
         raise HTTPException(status_code=404, detail="No publications found")
 
     researcher = db.query(Researcher).filter_by(id=pubs[0].researcher_id).first()

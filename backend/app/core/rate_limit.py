@@ -39,8 +39,8 @@ def _build_limiter() -> Limiter:
         key_func=_key_func,
         default_limits=[settings.RATE_LIMIT_DEFAULT],
         storage_uri=storage_uri,
-        headers_enabled=True,
-        strategy="fixed-window-elastic-expiry",
+        headers_enabled=False,
+        strategy="fixed-window",
     )
 
 

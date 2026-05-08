@@ -71,9 +71,9 @@ class Settings(BaseSettings):
     ORCID_OAUTH_STATE_COOKIE: str = "orcid_oauth_state"
     ORCID_OAUTH_STATE_TTL_SECONDS: int = 600
 
-    CORS_ALLOWED_ORIGINS: List[str] = Field(default_factory=list)
+    CORS_ALLOWED_ORIGINS: str = ""
 
-    TRUSTED_HOSTS: List[str] = Field(default_factory=lambda: ["*"])
+    TRUSTED_HOSTS: str = "*"
 
     RATE_LIMIT_DEFAULT: str = "60/minute"
     RATE_LIMIT_AUTH: str = "10/minute"
@@ -92,19 +92,11 @@ class Settings(BaseSettings):
     SECURITY_HSTS_INCLUDE_SUBDOMAINS: bool = True
     SECURITY_HSTS_PRELOAD: bool = False
 
-    @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def _parse_cors(cls, v):
-        return _split_csv(v)
-
-    @field_validator("TRUSTED_HOSTS", mode="before")
-    @classmethod
-    def _parse_trusted_hosts(cls, v):
-        parsed = _split_csv(v) if not isinstance(v, list) else v
-        return parsed or ["*"]
-
     @model_validator(mode="after")
     def _validate_security(self) -> "Settings":
+        cors_origins = self.cors_allowed_origins
+        trusted_hosts = self.trusted_hosts
+
         if self.ENVIRONMENT == "production":
             weak = {"change_me", "changeme", "secret", "password", ""}
             if self.JWT_SECRET.strip().lower() in weak:
@@ -116,11 +108,11 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "JWT_SECRET debe tener al menos 32 caracteres en producción."
                 )
-            if "*" in self.CORS_ALLOWED_ORIGINS:
+            if "*" in cors_origins:
                 raise ValueError(
                     "CORS_ALLOWED_ORIGINS no puede contener '*' en producción."
                 )
-            if not self.CORS_ALLOWED_ORIGINS:
+            if not cors_origins:
                 raise ValueError(
                     "CORS_ALLOWED_ORIGINS debe definirse explícitamente en producción."
                 )
@@ -128,12 +120,12 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "API_KEY_VALUE debe tener al menos 24 caracteres en producción."
                 )
-            if self.TRUSTED_HOSTS == ["*"]:
+            if trusted_hosts == ["*"]:
                 raise ValueError(
                     "TRUSTED_HOSTS debe definirse explícitamente en producción."
                 )
 
-        for origin in self.CORS_ALLOWED_ORIGINS:
+        for origin in cors_origins:
             parsed = urlparse(origin)
             if parsed.scheme not in {"http", "https"} or not parsed.netloc:
                 raise ValueError(f"Origen CORS inválido: {origin!r}")
@@ -143,6 +135,15 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
+
+    @property
+    def cors_allowed_origins(self) -> List[str]:
+        return _split_csv(self.CORS_ALLOWED_ORIGINS)
+
+    @property
+    def trusted_hosts(self) -> List[str]:
+        parsed = _split_csv(self.TRUSTED_HOSTS)
+        return parsed or ["*"]
 
     @property
     def docs_url(self) -> str | None:

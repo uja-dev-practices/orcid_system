@@ -1,19 +1,3 @@
-"""
-Middleware de cabeceras de seguridad HTTP.
-
-Aplica un perfil seguro por defecto:
-- Strict-Transport-Security (HSTS) — fuerza HTTPS en navegadores compatibles.
-- X-Content-Type-Options: nosniff
-- X-Frame-Options: DENY (clickjacking)
-- Referrer-Policy: strict-origin-when-cross-origin
-- Permissions-Policy: bloquea APIs sensibles por defecto
-- Cross-Origin-Opener-Policy / Resource-Policy: aislamiento del navegador
-- Content-Security-Policy laxa para Swagger/OpenAPI (CDN), restrictiva para el resto.
-
-NOTA: El frontend SPA tiene su propia CSP en su servidor. Aquí
-endurecemos lo que sirve el backend (JSON, XML, ZIP, /docs, /redoc, etc.).
-"""
-
 from __future__ import annotations
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -82,7 +66,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 hsts += "; preload"
             response.headers.setdefault("Strict-Transport-Security", hsts)
 
-        response.headers.pop("Server", None)
-        response.headers.pop("X-Powered-By", None)
+        # `MutableHeaders` no implementa `.pop()`. Eliminamos de forma segura.
+        if "server" in response.headers:
+            del response.headers["server"]
+        if "x-powered-by" in response.headers:
+            del response.headers["x-powered-by"]
 
         return response
