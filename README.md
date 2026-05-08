@@ -19,7 +19,7 @@
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Overview: What is this project meant
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Overview: What is this project meant
 
 `orcid-system` is designed for research workflows where ORCID data must be ingested, normalized, and exported.
 
@@ -36,7 +36,7 @@ Core capabilities:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Tech Stack
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Tech Stack
 
 ### Backend
 - FastAPI
@@ -60,7 +60,7 @@ Core capabilities:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Quick Start
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Quick Start
 
 From the project root:
 
@@ -82,7 +82,7 @@ Default local URLs:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Environment Configuration
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Environment Configuration
 
 Backend:
 - Main file: `backend/.env`
@@ -118,7 +118,7 @@ Important frontend variables:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). ngrok Bridge for Local OAuth Callback
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). ngrok Bridge for Local OAuth Callback
 
 To test OAuth callback from ORCID in local environments, compose can inject a public callback URL:
 
@@ -132,7 +132,7 @@ environment:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). API Endpoints
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). API Endpoints
 
 Base backend URL: `http://localhost:8000`
 
@@ -154,7 +154,7 @@ Base backend URL: `http://localhost:8000`
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Request Examples
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Request Examples
 
 ### Health
 ```bash
@@ -191,7 +191,7 @@ curl -X POST "http://localhost:8000/api/export/zip/publications" \
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Security Controls
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Security Controls
 
 Implemented controls in backend:
 
@@ -210,7 +210,7 @@ Implemented controls in backend:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Frontend Details
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Frontend Details
 
 The frontend is a React SPA using route-based navigation and a centralized API client.
 
@@ -237,7 +237,7 @@ The frontend is a React SPA using route-based navigation and a centralized API c
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Project Structure
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Project Structure
 
 ```text
 orcid-system/
@@ -302,7 +302,7 @@ orcid-system/
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20&color=%238b5cf6). Production Checklist
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Production Checklist
 
 - [ ] `ENVIRONMENT=production`
 - [ ] `DEBUG=false`
