@@ -8,11 +8,22 @@ from app.db.repositories.researcher_repository import ResearcherRepository
 from app.db.repositories.publication_repository import PublicationRepository
 from app.db.repositories.syncjob_repository import SyncJobRepository
 
+# ---------------------------------------------------------
+# Clase de servicio de sincronización
+# ---------------------------------------------------------
 
 class SyncService:
 
+    # ---------------------------------------------------------
+    # Función auxiliar: inicializar el servicio de sincronización
+    # ---------------------------------------------------------
+
     def __init__(self):
         self.orcid_client = ORCIDClient()
+
+    # ---------------------------------------------------------
+    # Función auxiliar: sincronizar las publicaciones de un investigador
+    # ---------------------------------------------------------
 
     def sync_researcher(self, db: Session, orcid_id: str):
         """
@@ -108,6 +119,10 @@ class SyncService:
             "updated_records": updated_records,
             "total": new_records + updated_records
         }
+
+    # ---------------------------------------------------------
+    # Función auxiliar: sincronizar y obtener investigador + publicaciones
+    # ---------------------------------------------------------
 
     def sync_and_get_full(self, db: Session, orcid_id: str):
         """

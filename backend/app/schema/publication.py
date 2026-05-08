@@ -3,6 +3,10 @@ from uuid import UUID
 from typing import Optional, List, Any
 from datetime import datetime
 
+# ---------------------------------------------------------
+# Modelo de publicación
+# ---------------------------------------------------------
+
 class PublicationSchema(BaseModel):
     id: UUID
     put_code: int | None = None

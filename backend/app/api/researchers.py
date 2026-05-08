@@ -2,11 +2,14 @@ from datetime import datetime
 from typing import List
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
-from app.db.models import Publication, Researcher
+from app.core.config import settings
+from app.core.rate_limit import limiter
+from app.db.models import Publication, PublicationDownload, Researcher
 from app.db.session import get_db
+from app.schema.publication import PublicationSchema
 from app.schema.researcher import (
     ResearcherBatchSearchRequestSchema,
     ResearcherBatchSearchResponseSchema,
@@ -14,18 +17,15 @@ from app.schema.researcher import (
     ResearcherStatsSchema,
     ResearcherWithPublicationsSchema,
 )
+from app.security.jwt import get_current_researcher, get_optional_current_researcher
 from app.services.normalizer import PublicationNormalizer
-from app.services.orcid_client import get_display_name, get_works_summary, get_work_detail
-from app.schema.publication import PublicationSchema
-from app.db.models import PublicationDownload
-from app.security.jwt import get_optional_current_researcher
+from app.services.orcid_client import get_display_name, get_work_detail, get_works_summary
+from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
+
 
 router = APIRouter(prefix="/researchers", tags=["researchers"])
 
 
-# ---------------------------------------------------------
-# Función auxiliar: detectar si una publicación ha cambiado
-# ---------------------------------------------------------
 def publication_changed(existing: Publication, data: dict) -> bool:
     fields = [
         "title", "subtitle", "type", "journal",
@@ -33,18 +33,13 @@ def publication_changed(existing: Publication, data: dict) -> bool:
         "doi", "url", "short_description",
         "citation_type", "citation_value",
         "language_code", "country",
-        "external_ids", "contributors"
+        "external_ids", "contributors",
     ]
-
-    for f in fields:
-        if getattr(existing, f) != data[f]:
-            return True
-    return False
+    return any(getattr(existing, f) != data[f] for f in fields)
 
 
 def build_researcher_stats(publications: list) -> ResearcherStatsSchema:
     publication_types: dict[str, int] = {}
-
     for publication in publications:
         pub_type = getattr(publication, "type", None) or "unknown"
         publication_types[pub_type] = publication_types.get(pub_type, 0) + 1
@@ -98,7 +93,7 @@ def _upsert_researcher_publications(
                 "doi", "url", "short_description",
                 "citation_type", "citation_value",
                 "language_code", "country",
-                "external_ids", "contributors"
+                "external_ids", "contributors",
             ]:
                 setattr(existing, field, data[field])
             existing.last_modified = datetime.utcnow()
@@ -142,12 +137,17 @@ def _decorate_downloaded_by_me(
     out: List[PublicationSchema] = []
     for p in publications:
         out.append(
-            PublicationSchema.model_validate(p).model_copy(update={"downloaded_by_me": p.id in downloaded_ids})
+            PublicationSchema.model_validate(p).model_copy(
+                update={"downloaded_by_me": p.id in downloaded_ids}
+            )
         )
     return out
 
 
 def build_search_response(orcid_id: str, db: Session, current: Researcher | None) -> ResearcherWithPublicationsSchema:
+    if not is_valid_orcid(orcid_id):
+        raise HTTPException(status_code=400, detail="Invalid ORCID iD")
+
     researcher = db.query(Researcher).filter(Researcher.orcid_id == orcid_id).first()
     if not researcher:
         researcher = Researcher(
@@ -159,10 +159,6 @@ def build_search_response(orcid_id: str, db: Session, current: Researcher | None
         db.add(researcher)
         db.flush()
 
-    # Si todavía no conocemos el nombre del investigador (por ejemplo, recién
-    # creado al sincronizarse desde el buscador), lo resolvemos contra el
-    # endpoint `/record` público de ORCID. No tocamos un nombre ya existente
-    # para no pisar valores establecidos por el flujo de autenticación.
     if not researcher.name:
         display_name = get_display_name(orcid_id)
         if display_name:
@@ -185,10 +181,27 @@ def build_search_response(orcid_id: str, db: Session, current: Researcher | None
 
 
 # ---------------------------------------------------------
-# ENDPOINT 1: SEARCH + SYNC (sin contadores)
+# ENDPOINT 1: SEARCH + SYNC
 # ---------------------------------------------------------
-@router.post("/search", response_model=ResearcherBatchSearchResponseSchema, response_model_exclude_none=True)
+
+def _search_rate_limit(request: Request) -> str:
+    """
+    Aplica un límite distinto si el usuario está autenticado.
+    Como SlowAPI evalúa el decorador antes de las dependencias, devolvemos
+    el límite más restrictivo y subimos sólo si hay token (state.researcher).
+    """
+    researcher = getattr(request.state, "researcher", None)
+    return settings.RATE_LIMIT_SEARCH_AUTH if researcher else settings.RATE_LIMIT_SEARCH_ANON
+
+
+@router.post(
+    "/search",
+    response_model=ResearcherBatchSearchResponseSchema,
+    response_model_exclude_none=True,
+)
+@limiter.limit(_search_rate_limit)
 def search_and_sync_researchers(
+    request: Request,
     payload: ResearcherBatchSearchRequestSchema,
     db: Session = Depends(get_db),
     current: Researcher | None = Depends(get_optional_current_researcher),
@@ -196,26 +209,33 @@ def search_and_sync_researchers(
     results: List[ResearcherWithPublicationsSchema] = []
     errors: List[ResearcherSearchErrorSchema] = []
 
-    # Evita llamadas duplicadas a ORCID conservando el orden de entrada.
     unique_orcid_ids = list(dict.fromkeys(payload.orcid_ids))
 
     for orcid_id in unique_orcid_ids:
         try:
             results.append(build_search_response(orcid_id, db, current))
+        except HTTPException as exc:
+            db.rollback()
+            errors.append(
+                ResearcherSearchErrorSchema(
+                    orcid_id=orcid_id,
+                    detail=str(exc.detail),
+                )
+            )
         except httpx.HTTPStatusError as exc:
             db.rollback()
             errors.append(
                 ResearcherSearchErrorSchema(
                     orcid_id=orcid_id,
-                    detail=f"ORCID devolvió {exc.response.status_code} para {orcid_id}.",
+                    detail=f"ORCID returned {exc.response.status_code}",
                 )
             )
-        except Exception as exc:
+        except Exception:
             db.rollback()
             errors.append(
                 ResearcherSearchErrorSchema(
                     orcid_id=orcid_id,
-                    detail=str(exc),
+                    detail="Unexpected error while processing ORCID iD",
                 )
             )
 
@@ -228,14 +248,24 @@ def search_and_sync_researchers(
 
 
 # ---------------------------------------------------------
-# ENDPOINT 2: SYNC COMPLETO (con contadores + status)
+# ENDPOINT 2: SYNC COMPLETO (requiere autenticación)
 # ---------------------------------------------------------
-@router.post("/{orcid_id}/sync", response_model=ResearcherWithPublicationsSchema, response_model_exclude_none=True)
+
+@router.post(
+    "/{orcid_id}/sync",
+    response_model=ResearcherWithPublicationsSchema,
+    response_model_exclude_none=True,
+)
+@limiter.limit(settings.RATE_LIMIT_SYNC)
 def sync_researcher(
-    orcid_id: str,
+    request: Request,
+    orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
     db: Session = Depends(get_db),
-    current: Researcher | None = Depends(get_optional_current_researcher),
+    current: Researcher = Depends(get_current_researcher),
 ):
+    if not is_valid_orcid(orcid_id):
+        raise HTTPException(status_code=400, detail="Invalid ORCID iD")
+
     researcher = db.query(Researcher).filter_by(orcid_id=orcid_id).first()
     if not researcher:
         raise HTTPException(status_code=404, detail="Researcher not found")
@@ -244,7 +274,6 @@ def sync_researcher(
     groups = works.get("group", [])
 
     publications_output = []
-
     new_count = 0
     updated_count = 0
     unchanged_count = 0
@@ -277,21 +306,17 @@ def sync_researcher(
 
         if existing:
             if publication_changed(existing, data):
-                # updated
                 for field in data:
                     setattr(existing, field, data[field])
                 existing.last_modified = datetime.utcnow()
                 existing.status = "updated"
                 updated_count += 1
             else:
-                # unchanged
                 existing.status = "unchanged"
                 unchanged_count += 1
 
             pub = existing
-
         else:
-            # new
             pub = Publication(
                 researcher_id=researcher.id,
                 **data,
