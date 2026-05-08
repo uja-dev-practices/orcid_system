@@ -6,6 +6,9 @@ ATOM_NS = "http://www.w3.org/2005/Atom"
 DC_NS = "http://purl.org/dc/elements/1.1/"
 EXTRA_NS = "http://example.org/orcid-extra"   # namespace para campos extendidos
 
+# ---------------------------------------------------------
+# Clase de generador de feed SWORD
+# ---------------------------------------------------------
 
 class SWORDGenerator:
 

@@ -3,42 +3,56 @@ services:
   backend:
     build: ./backend
     container_name: orcid-backend
-    restart: always
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/orcid_db
       REDIS_URL: redis://redis:6379/0
-      ORCID_REDIRECT_URI: https://jargon-supreme-palpable.ngrok-free.dev/callback
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   frontend:
     build: ./frontend
     container_name: orcid-frontend
-    restart: always
+    restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     depends_on:
       - backend
     env_file:
       - ./frontend/.env
+    security_opt:
+      - no-new-privileges:true
 
   db:
     image: postgres:16
     container_name: orcid-postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: orcid_db
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,13 +60,18 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+    security_opt:
+      - no-new-privileges:true
 
   redis:
     image: redis:7
     container_name: orcid-redis
-    restart: always
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    expose:
+      - "6379"
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   postgres_data:
