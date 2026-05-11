@@ -34,4 +34,4 @@ deploy_to_sinbad2:
     - echo "Frontend -> http://$SSH_HOST:$FRONTEND_PORT"
 
   only:
-    - main
+    - branches
