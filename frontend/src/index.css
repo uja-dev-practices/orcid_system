@@ -55,6 +55,12 @@
   --color-tag-default-text: #5F5E5A;
   --color-tag-default-border: #D3D1C7;
 
+  /* Error (hue-0° mirrors of the ORCID green palette — same HSL lightness & saturation) */
+  --color-error-vivid: #CE3939;
+  --color-error-soft: #F3DDDD;
+  --color-error-border: #DD9797;
+  --color-error-text: #6E1111;
+
   /* Fonts */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
