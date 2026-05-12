@@ -3,6 +3,7 @@ import { useLocation, useParams, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppHeader } from "../components/layout/AppHeader";
+import Footer from "../components/layout/Footer";
 import { ResearcherCard } from "../components/dashboard/ResearcherCard";
 import { StatsRow } from "../components/dashboard/StatsRow";
 import { PublicationsTable } from "../components/dashboard/PublicationsTable";
@@ -196,53 +197,42 @@ export function DashboardPage() {
   return (
     <div className="flex min-h-screen flex-col bg-surface-tertiary">
       <AppHeader variant="dashboard" />
+      <main className="flex-1">
+        <div className="mx-auto w-full max-w-[1100px] px-5 py-7">
+          {researcher ? (
+            <ResearcherCard
+              researcher={researcher}
+              actions={
+                <>
+                  <SyncButton onClick={handleSync} status={syncStatus} />
+                  <ExportDropdown
+                    onExport={handleExport}
+                    exportingFormat={exportingFormat}
+                    selectedCount={selectedIds.size}
+                    isAuthenticated={isAuthenticated}
+                    newPublicationsCount={newPublicationIds.length}
+                  />
+                </>
+              }
+            />
+          ) : (
+            <ResearcherSkeleton />
+          )}
 
-      <div className="mx-auto w-full max-w-[1100px] px-5 py-7">
-        {researcher ? (
-          <ResearcherCard
-            researcher={researcher}
-            actions={
-              <>
-                <SyncButton onClick={handleSync} status={syncStatus} />
-                <ExportDropdown
-                  onExport={handleExport}
-                  exportingFormat={exportingFormat}
-                  selectedCount={selectedIds.size}
-                  isAuthenticated={isAuthenticated}
-                  newPublicationsCount={newPublicationIds.length}
-                />
-              </>
-            }
+          <StatsRow publications={publications} />
+
+          <PublicationsTable
+            publications={publications}
+            loading={pubsLoading}
+            error={pubsError}
+            onRetry={() => loadBundle()}
+            selectedIds={selectedIds}
+            onSelectedIdsChange={setSelectedIds}
+            isAuthenticated={isAuthenticated}
           />
-        ) : (
-          <ResearcherSkeleton />
-        )}
-
-        <StatsRow publications={publications} />
-
-        <PublicationsTable
-          publications={publications}
-          loading={pubsLoading}
-          error={pubsError}
-          onRetry={() => loadBundle()}
-          selectedIds={selectedIds}
-          onSelectedIdsChange={setSelectedIds}
-          isAuthenticated={isAuthenticated}
-        />
-
-        <footer className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
-          <span className="text-xs text-ink-tertiary">
-            Datos obtenidos vía ORCID Public API v3.0
-          </span>
-          <div className="flex gap-4">
-            {["ORCID OAuth 2.0", "SWORD v2", "Dublin Core"].map((t) => (
-              <span key={t} className="text-xs text-ink-tertiary">
-                {t}
-              </span>
-            ))}
-          </div>
-        </footer>
-      </div>
+        </div>
+      </main>
+      <Footer />
     </div>
   );
 }
