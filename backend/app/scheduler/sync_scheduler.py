@@ -9,9 +9,16 @@ import os
 # Cargar variables del .env
 load_dotenv()
 
+# ---------------------------------------------------------
+# Variables de entorno
+# ---------------------------------------------------------
+
 API_KEY = os.getenv("API_KEY_VALUE")
 BASE_URL = os.getenv("BASE_URL")
 
+# ---------------------------------------------------------
+# Función auxiliar: ejecutar sincronización mensual
+# ---------------------------------------------------------
 
 def run_monthly_sync():
     db = SessionLocal()
@@ -36,6 +43,9 @@ def run_monthly_sync():
 
     db.close()
 
+# ---------------------------------------------------------
+# Función auxiliar: iniciar el scheduler
+# ---------------------------------------------------------
 
 def start_scheduler():
     scheduler = BackgroundScheduler()

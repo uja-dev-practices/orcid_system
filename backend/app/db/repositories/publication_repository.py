@@ -1,7 +1,15 @@
 from sqlalchemy.orm import Session
 from app.db.models import Publication
 
+# ---------------------------------------------------------
+# Repositorio de publicaciones
+# ---------------------------------------------------------
+
 class PublicationRepository:
+
+    # ---------------------------------------------------------
+    # Función auxiliar: obtener publicación por put_code
+    # ---------------------------------------------------------
 
     @staticmethod
     def get_by_put_code(db: Session, researcher_id: str, put_code: int):
@@ -16,6 +24,10 @@ class PublicationRepository:
             )
             .first()
         )
+
+    # ---------------------------------------------------------
+    # Función auxiliar: crear una nueva publicación
+    # ---------------------------------------------------------
 
     @staticmethod
     def create(db: Session, researcher_id: str, data: dict):
@@ -37,6 +49,10 @@ class PublicationRepository:
         db.refresh(pub)
         return pub
 
+    # ---------------------------------------------------------
+    # Función auxiliar: actualizar una publicación existente
+    # ---------------------------------------------------------
+
     @staticmethod
     def update(db: Session, publication: Publication, data: dict):
         """
@@ -52,6 +68,10 @@ class PublicationRepository:
         db.commit()
         db.refresh(publication)
         return publication
+
+    # ---------------------------------------------------------
+    # Función auxiliar: listar publicaciones de un investigador
+    # ---------------------------------------------------------
 
     @staticmethod
     def list_by_researcher(db: Session, researcher_id: str):

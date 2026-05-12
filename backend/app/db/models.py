@@ -6,6 +6,9 @@ from datetime import datetime
 
 from app.db.session import Base
 
+# ---------------------------------------------------------
+# Modelo de investigador
+# ---------------------------------------------------------
 
 class Researcher(Base):
     __tablename__ = "researchers"
@@ -18,6 +21,9 @@ class Researcher(Base):
 
     publications = relationship("Publication", back_populates="researcher", cascade="all, delete-orphan")
 
+# ---------------------------------------------------------
+# Modelo de publicación
+# ---------------------------------------------------------
 
 class Publication(Base):
     __tablename__ = "publications"
@@ -65,6 +71,9 @@ class Publication(Base):
     # Legacy: descargado global (deprecado). Mantener por compatibilidad de DB.
     downloaded = Column(Boolean, nullable=False, default=False)
 
+# ---------------------------------------------------------
+# Modelo de descarga de publicación
+# ---------------------------------------------------------
 
 class PublicationDownload(Base):
     """
