@@ -14,8 +14,14 @@ BASE_URL_SANDBOX = "https://pub.sandbox.orcid.org/v3.0"
 # TOKEN_URL_PROD = "https://orcid.org/oauth/token"
 # BASE_URL_PROD = "https://pub.orcid.org/v3.0"
 
+# ---------------------------------------------------------
+# Clase de cliente de ORCID
+# ---------------------------------------------------------
 
 class ORCIDClient:
+    # ---------------------------------------------------------
+    # Función auxiliar: inicializar el cliente de ORCID
+    # ---------------------------------------------------------
     def __init__(self):
         # Asegura que al ejecutar `uvicorn` local también se carga `backend/.env`.
         # (En docker `ORCID_REDIRECT_URI` y secretos llegan por env_file, así que esto no molesta.)
@@ -114,6 +120,10 @@ class ORCIDClient:
         if state:
             params["state"] = state
         return f"{self.authorization_url}?{urllib.parse.urlencode(params)}"
+
+    # ---------------------------------------------------------
+    # Función auxiliar: intercambiar código de autorización
+    # ---------------------------------------------------------
 
     def exchange_authorization_code(
         self,
