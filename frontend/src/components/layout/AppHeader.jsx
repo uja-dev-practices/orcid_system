@@ -30,7 +30,7 @@ export function AppHeader({ variant = "landing" }) {
         {/* Brand — always navigates home */}
         <Link
           to="/"
-          className="text-[15px] font-bold tracking-tight text-white transition-opacity hover:opacity-90"
+          className="text-[16px] font-bold tracking-tight text-white transition-opacity hover:opacity-90"
         >
           ORCID<span className="text-orcid-green">2</span>SWORD
         </Link>
