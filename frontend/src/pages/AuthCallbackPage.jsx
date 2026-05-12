@@ -36,6 +36,7 @@ export function AuthCallbackPage() {
     hasHandledCodeRef.current = true;
 
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
     const oauthError = searchParams.get("error");
     const errorDescription = searchParams.get("error_description");
 
@@ -69,7 +70,7 @@ export function AuthCallbackPage() {
     }
     sessionStorage.setItem(consumedKey, "1");
 
-    exchangeOrcidCode(code)
+    exchangeOrcidCode(code, { state })
       .then(({ access_token }) => {
         storeToken(access_token);
         setStatus("success");
@@ -87,16 +88,29 @@ export function AuthCallbackPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // After a short delay, redirect to home if we're NOT in a popup
-  // (fallback for browsers that block window.open).
+  // After a short delay, always attempt window.close():
+  //  - If we're in the OAuth popup (opened by window.open()), the browser
+  //    allows close() and the window disappears.
+  //  - If the window doesn't close (browser blocked it, or the user opened
+  //    /callback directly as a plain tab), we detect that via window.closed
+  //    and fall back to navigating to "/" so the user sees the landing page.
+  //
+  // NOTE: Neither window.opener nor window.name are reliable here.
+  //   - window.name is cleared by Chrome on cross-origin navigation
+  //     (our domain → sandbox.orcid.org → our domain clears the name).
+  //   - window.opener is severed by ORCID Sandbox's own COOP header
+  //     while the popup passes through their domain.
   useEffect(() => {
-    if (status === "success" || status === "error") {
-      const isPopup = Boolean(window.opener);
-      if (!isPopup) {
-        const timer = setTimeout(() => navigate("/"), 2000);
-        return () => clearTimeout(timer);
-      }
-    }
+    if (status !== "success" && status !== "error") return;
+    const outer = setTimeout(() => {
+      window.close();
+      // Give the browser a tick to process the close. If the window
+      // is still open, we're in a plain tab — navigate to home instead.
+      setTimeout(() => {
+        if (!window.closed) navigate("/");
+      }, 300);
+    }, 1500);
+    return () => clearTimeout(outer);
   }, [status, navigate]);
 
   return (
@@ -154,9 +168,16 @@ export function AuthCallbackPage() {
 /* ─────────────────────────── Helpers ───────────────────────────── */
 
 /**
- * If running in a popup, posts a message to the opener and closes the
- * window. If not in a popup (e.g. browser blocked it), the message is
- * irrelevant — the useEffect above handles the redirect to "/".
+ * If running in a popup, posts a message to the opener so the parent
+ * window can update its auth state without waiting for the storage event
+ * fallback in AuthContext. The actual `window.close()` is handled by the
+ * delayed effect above so we don't race with the success/error UI.
+ *
+ * `window.opener` may be `null` here when the browser severed the opener
+ * relationship during the OAuth redirect chain (some COOP combinations
+ * trigger this). In that case AuthContext picks up the new token via the
+ * `storage` event instead — that's why we still call `storeToken()` even
+ * when we can't postMessage.
  */
 function notifyAndClose(message) {
   if (window.opener && !window.opener.closed) {
@@ -165,8 +186,6 @@ function notifyAndClose(message) {
     } catch {
       /* opener may have navigated away */
     }
-    // Small delay so the user sees the success/error state before close.
-    setTimeout(() => window.close(), 1200);
   }
 }
 

@@ -237,9 +237,11 @@ export function getOrcidAuthorizeUrl() {
  * Intercambia el authorization code (recibido de ORCID tras el OAuth)
  * por un JWT propio del backend. Devuelve `{ access_token, token_type }`.
  */
-export async function exchangeOrcidCode(code, { signal } = {}) {
+export async function exchangeOrcidCode(code, { state, signal } = {}) {
+  const params = { code };
+  if (state) params.state = state;
   return request(
-    `/auth/orcid/callback?${new URLSearchParams({ code }).toString()}`,
+    `/auth/orcid/callback?${new URLSearchParams(params).toString()}`,
     { signal },
   );
 }

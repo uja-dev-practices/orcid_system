@@ -25,11 +25,17 @@ def _key_func(request: Request) -> str:
     Devuelve la clave de rate limit para el request.
 
     - Si hay un investigador autenticado en el state, usa su orcid_id.
-    - En caso contrario, usa la IP remota.
+    - Si hay cabecera X-Forwarded-For (ngrok, nginx, cualquier proxy inverso),
+      usa la primera IP de la cadena (la del cliente real).
+    - En caso contrario, usa la IP remota del socket.
     """
     researcher = getattr(request.state, "researcher", None)
     if researcher is not None:
         return f"user:{getattr(researcher, 'orcid_id', None) or researcher.id}"
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+        return f"ip:{client_ip}"
     return f"ip:{get_remote_address(request)}"
 
 

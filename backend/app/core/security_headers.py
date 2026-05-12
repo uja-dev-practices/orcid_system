@@ -49,7 +49,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
             "accelerometer=(), gyroscope=(), magnetometer=(), interest-cohort=()",
         )
-        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+       
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
         response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
 
@@ -66,7 +67,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 hsts += "; preload"
             response.headers.setdefault("Strict-Transport-Security", hsts)
 
-        # `MutableHeaders` no implementa `.pop()`. Eliminamos de forma segura.
         if "server" in response.headers:
             del response.headers["server"]
         if "x-powered-by" in response.headers:
