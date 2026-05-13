@@ -325,7 +325,7 @@ This project is the result of the collaboration with the **University of Jaén**
 | **Backend** | Mireya Cueto Garrido | [@MireyaCueto](https://github.com/MireyaCueto) |
 
 ### Direction
-* **Proyect Supervisor:** Luis Martínez López
+* **Project Supervisor:** Luis Martínez López
 
 ---
 
