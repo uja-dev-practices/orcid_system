@@ -1,10 +1,22 @@
-FROM node:20-alpine
+# ── Build stage ────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
+RUN npm run build             # genera dist/ con base=/orcid2words/
 
-CMD ["npm", "run", "dev", "--", "--host"]
+# ── Serve stage ────────────────────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN npm install -g serve
+
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 8073
+CMD ["serve", "-s", "dist", "-l", "8073"]
