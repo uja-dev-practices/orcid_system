@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppHeader } from "../components/layout/AppHeader";
+import Footer from "../components/layout/Footer";
 import { Spinner } from "../components/ui/Spinner";
 import { OrcidLogo } from "../components/ui/OrcidLogo";
 import {
@@ -188,135 +189,137 @@ export function GroupResultsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-surface-tertiary">
       <AppHeader variant="group" />
+      <main className="flex-1">
+        <div className="mx-auto w-full max-w-[1100px] px-5 py-7">
+          {/* Page header */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-primary text-white">
+                <UsersIcon size={20} />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-ink-primary">
+                  Búsqueda grupal
+                </h1>
+                {!loading && (
+                  <p className="text-xs text-ink-tertiary">
+                    {results.length} investigador{results.length !== 1 ? "es" : ""} encontrado{results.length !== 1 ? "s" : ""}
+                    {errors.length > 0 && (
+                      <span className="ml-1 text-ink-danger">
+                        · {errors.length} con error
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
 
-      <div className="mx-auto w-full max-w-[1100px] px-5 py-7">
-        {/* Page header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-primary text-white">
-              <UsersIcon size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-ink-primary">
-                Búsqueda grupal
-              </h1>
-              {!loading && (
-                <p className="text-xs text-ink-tertiary">
-                  {results.length} investigador{results.length !== 1 ? "es" : ""} encontrado{results.length !== 1 ? "s" : ""}
-                  {errors.length > 0 && (
-                    <span className="ml-1 text-ink-danger">
-                      · {errors.length} con error
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
+            {/* Global export buttons */}
+            {!loading && results.length > 0 && (
+              <div className="flex gap-2">
+                {["xml", "zip"].map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => handleGlobalExport(fmt)}
+                    disabled={globalDisabled}
+                    className="inline-flex items-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-4 py-2 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {globalExporting === fmt ? (
+                      <Spinner size={14} />
+                    ) : isAuthenticated && allNewIds.length > 0 ? (
+                      <SparkleIcon size={13} className="text-brand-accent" />
+                    ) : (
+                      <DownloadIcon size={14} />
+                    )}
+                    {globalExporting === fmt
+                      ? `Exportando ${fmt.toUpperCase()}...`
+                      : `${fmt.toUpperCase()} · ${globalLabel}`}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Global export buttons */}
+          {/* Loading state */}
+          {loading && (
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-ink-tertiary">
+              <Spinner size={28} />
+              <p className="text-sm">
+                Sincronizando {orcidIds?.length ?? "?"} investigadores con ORCID...
+              </p>
+              <p className="text-xs text-ink-tertiary/60">
+                Esto puede tardar unos segundos si hay muchos perfiles nuevos.
+              </p>
+            </div>
+          )}
+
+          {/* Results grid */}
           {!loading && results.length > 0 && (
-            <div className="flex gap-2">
-              {["xml", "zip"].map((fmt) => (
-                <button
-                  key={fmt}
-                  type="button"
-                  onClick={() => handleGlobalExport(fmt)}
-                  disabled={globalDisabled}
-                  className="inline-flex items-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-4 py-2 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {globalExporting === fmt ? (
-                    <Spinner size={14} />
-                  ) : isAuthenticated && allNewIds.length > 0 ? (
-                    <SparkleIcon size={13} className="text-brand-accent" />
-                  ) : (
-                    <DownloadIcon size={14} />
-                  )}
-                  {globalExporting === fmt
-                    ? `Exportando ${fmt.toUpperCase()}...`
-                    : `${fmt.toUpperCase()} · ${globalLabel}`}
-                </button>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {results.map((bundle) => (
+                <ResearcherResultCard
+                  key={bundle.researcher?.orcid_id}
+                  bundle={bundle}
+                  isAuthenticated={isAuthenticated}
+                  exporting={cardExporting[bundle.researcher?.orcid_id] ?? null}
+                  onExport={(fmt, newIds, totalIds) =>
+                    handleCardExport(
+                      bundle.researcher?.orcid_id,
+                      fmt,
+                      newIds,
+                      totalIds,
+                    )
+                  }
+                />
               ))}
             </div>
           )}
-        </div>
 
-        {/* Loading state */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center gap-4 py-24 text-ink-tertiary">
-            <Spinner size={28} />
-            <p className="text-sm">
-              Sincronizando {orcidIds?.length ?? "?"} investigadores con ORCID...
-            </p>
-            <p className="text-xs text-ink-tertiary/60">
-              Esto puede tardar unos segundos si hay muchos perfiles nuevos.
-            </p>
-          </div>
-        )}
-
-        {/* Results grid */}
-        {!loading && results.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {results.map((bundle) => (
-              <ResearcherResultCard
-                key={bundle.researcher?.orcid_id}
-                bundle={bundle}
-                isAuthenticated={isAuthenticated}
-                exporting={cardExporting[bundle.researcher?.orcid_id] ?? null}
-                onExport={(fmt, newIds, totalIds) =>
-                  handleCardExport(
-                    bundle.researcher?.orcid_id,
-                    fmt,
-                    newIds,
-                    totalIds,
-                  )
-                }
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Errors */}
-        {!loading && errors.length > 0 && (
-          <div className="mt-6">
-            <h2 className="mb-3 text-sm font-medium text-ink-secondary">
-              ORCID iDs que no pudieron cargarse
-            </h2>
-            <div className="space-y-2">
-              {errors.map((e) => (
-                <div
-                  key={e.orcid_id}
-                  className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3"
-                >
-                  <AlertIcon size={16} className="mt-0.5 shrink-0 text-red-500" />
-                  <div>
-                    <p className="font-mono text-[13px] font-medium text-red-700">
-                      {e.orcid_id}
-                    </p>
-                    <p className="text-xs text-red-500">
-                      {e.detail ?? "No se pudo obtener información de este ORCID."}
-                    </p>
+          {/* Errors */}
+          {!loading && errors.length > 0 && (
+            <div className="mt-6">
+              <h2 className="mb-3 text-sm font-medium text-ink-secondary">
+                ORCID iDs que no pudieron cargarse
+              </h2>
+              <div className="space-y-2">
+                {errors.map((e) => (
+                  <div
+                    key={e.orcid_id}
+                    className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3"
+                  >
+                    <AlertIcon size={16} className="mt-0.5 shrink-0 text-red-500" />
+                    <div>
+                      <p className="font-mono text-[13px] font-medium text-red-700">
+                        {e.orcid_id}
+                      </p>
+                      <p className="text-xs text-red-500">
+                        {e.detail ?? "No se pudo obtener información de este ORCID."}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Empty state */}
-        {!loading && results.length === 0 && errors.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-ink-tertiary">
-            <UsersIcon size={32} className="opacity-30" />
-            <p className="text-sm">No se encontraron resultados.</p>
-            <Link
-              to="/"
-              className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-brand-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-primary-hover"
-            >
-              <ArrowLeftIcon />
-              Volver al inicio
-            </Link>
-          </div>
-        )}
-      </div>
+          {/* Empty state */}
+          {!loading && results.length === 0 && errors.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-ink-tertiary">
+              <UsersIcon size={32} className="opacity-30" />
+              <p className="text-sm">No se encontraron resultados.</p>
+              <Link
+                to="/"
+                className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-brand-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-primary-hover"
+              >
+                <ArrowLeftIcon />
+                Volver al inicio
+              </Link>
+            </div>
+          )}
+        </div>
+      </main>
+      <Footer />
     </div>
   );
 }
