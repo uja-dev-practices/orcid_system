@@ -1,0 +1,6 @@
+# Detect text files and normalize line endings in the index (cross‑platform).
+* text=auto
+
+# YAML / CI: always LF so Linux runners and merges match Windows checkouts.
+*.yml text eol=lf
+*.yaml text eol=lf
