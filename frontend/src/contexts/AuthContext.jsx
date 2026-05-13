@@ -78,6 +78,20 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  // Fallback when postMessage cannot reach the opener (e.g. browser policy
+  // severs window.opener during the OAuth redirect chain). localStorage is
+  // shared between same-origin windows, so the popup's `setItem(...)` fires
+  // a storage event in this window and we can pick up the new token.
+  useEffect(() => {
+    function handleStorage(event) {
+      if (event.key !== STORAGE_KEY) return;
+      if (event.newValue) setToken(event.newValue);
+      else setToken(null);
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   /**
    * Stores a JWT directly (used by AuthCallbackPage).
    * Does NOT trigger any network request.
