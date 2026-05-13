@@ -10,13 +10,10 @@ COPY . .
 RUN npm run build             # genera dist/ con base=/orcid2words/
 
 # ── Serve stage ────────────────────────────────────────────────
-FROM node:20-alpine
+FROM nginx:alpine
 
-WORKDIR /app
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist /app/dist
 
-RUN npm install -g serve
-
-COPY --from=builder /app/dist ./dist
-
-EXPOSE 8073
-CMD ["serve", "-s", "dist", "-l", "5173"]
+EXPOSE 5173
+CMD ["nginx", "-g", "daemon off;"]
