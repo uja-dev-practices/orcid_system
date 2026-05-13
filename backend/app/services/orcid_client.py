@@ -14,8 +14,14 @@ BASE_URL_SANDBOX = "https://pub.sandbox.orcid.org/v3.0"
 # TOKEN_URL_PROD = "https://orcid.org/oauth/token"
 # BASE_URL_PROD = "https://pub.orcid.org/v3.0"
 
+# ---------------------------------------------------------
+# Clase de cliente de ORCID
+# ---------------------------------------------------------
 
 class ORCIDClient:
+    # ---------------------------------------------------------
+    # Función auxiliar: inicializar el cliente de ORCID
+    # ---------------------------------------------------------
     def __init__(self):
         # Asegura que al ejecutar `uvicorn` local también se carga `backend/.env`.
         # (En docker `ORCID_REDIRECT_URI` y secretos llegan por env_file, así que esto no molesta.)
@@ -115,6 +121,10 @@ class ORCIDClient:
             params["state"] = state
         return f"{self.authorization_url}?{urllib.parse.urlencode(params)}"
 
+    # ---------------------------------------------------------
+    # Función auxiliar: intercambiar código de autorización
+    # ---------------------------------------------------------
+
     def exchange_authorization_code(
         self,
         *,
@@ -148,3 +158,50 @@ def get_works_summary(orcid_id: str) -> dict:
 def get_work_detail(orcid_id: str, put_code: int) -> dict | None:
     client = ORCIDClient()
     return client.fetch_work_detail(orcid_id, put_code)
+
+
+def get_record(orcid_id: str) -> dict:
+    client = ORCIDClient()
+    return client.fetch_record(orcid_id)
+
+
+def extract_display_name(record: dict | None) -> str | None:
+    """
+    Devuelve un nombre legible a partir de la respuesta de `/record` de ORCID.
+
+    Prioriza `credit-name` (el nombre tal y como el investigador prefiere mostrarlo);
+    si no está disponible, compone `given-names` + `family-name`.
+    """
+    if not record:
+        return None
+
+    name = (record.get("person") or {}).get("name") or {}
+
+    credit = name.get("credit-name")
+    if isinstance(credit, dict):
+        credit_value = credit.get("value")
+        if credit_value:
+            return credit_value
+
+    given_obj = name.get("given-names")
+    family_obj = name.get("family-name")
+    given = given_obj.get("value") if isinstance(given_obj, dict) else None
+    family = family_obj.get("value") if isinstance(family_obj, dict) else None
+
+    full = " ".join(part for part in (given, family) if part)
+    return full or None
+
+
+def get_display_name(orcid_id: str) -> str | None:
+    """
+    Obtiene el nombre público del investigador desde ORCID.
+
+    Devuelve `None` (sin propagar la excepción) si la API de ORCID no responde
+    o el `record` no contiene un nombre utilizable, para no romper el flujo de
+    búsqueda cuando solo falla la resolución del nombre.
+    """
+    try:
+        record = get_record(orcid_id)
+    except Exception:
+        return None
+    return extract_display_name(record)

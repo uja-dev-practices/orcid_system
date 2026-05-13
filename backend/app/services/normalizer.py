@@ -1,5 +1,8 @@
 from typing import List
 
+# ---------------------------------------------------------
+# Función auxiliar: obtener valor de un diccionario
+# ---------------------------------------------------------
 
 def _get(d: dict | None, *keys, default=None):
     cur = d or {}
@@ -11,6 +14,9 @@ def _get(d: dict | None, *keys, default=None):
             return default
     return cur
 
+# ---------------------------------------------------------
+# Clase de normalización de publicaciones
+# ---------------------------------------------------------
 
 class PublicationNormalizer:
     @staticmethod

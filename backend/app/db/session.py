@@ -9,6 +9,7 @@ load_dotenv()
 # -----------------------------
 # DATABASE URL
 # -----------------------------
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(
@@ -29,6 +30,7 @@ Base = declarative_base()
 # -----------------------------
 # DB SESSION DEPENDENCY
 # -----------------------------
+
 def get_db():
     db = SessionLocal()
     try:
@@ -40,17 +42,25 @@ def get_db():
 # -----------------------------
 # INIT DB (CREA TABLAS)
 # -----------------------------
+
 def init_db():
+
     # Importa modelos para que SQLAlchemy los registre
+
     import app.db.models  # noqa
 
     # Crea todas las tablas si no existen
+
     Base.metadata.create_all(bind=engine)
 
     # Pequeñas migraciones "best-effort" para entornos sin Alembic.
     # (create_all no altera tablas existentes)
+
     _ensure_columns()
 
+# ---------------------------------------------------------
+# Función auxiliar: asegurar columnas existentes
+# ---------------------------------------------------------
 
 def _ensure_columns():
     insp = inspect(engine)

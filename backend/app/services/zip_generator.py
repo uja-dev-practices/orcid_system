@@ -7,12 +7,16 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from app.db.models import Publication, Researcher
 from app.services.sword_generator import SWORDGenerator
 
+# ---------------------------------------------------------
+# Clase de generador de ZIP
+# ---------------------------------------------------------
 
 class ZIPGenerator:
 
     # ---------------------------------------------------------
-    # MANIFEST.TXT — más completo
+    # Función auxiliar: generar manifest.txt
     # ---------------------------------------------------------
+
     @staticmethod
     def generate_manifest(researcher, publications):
         lines = [
