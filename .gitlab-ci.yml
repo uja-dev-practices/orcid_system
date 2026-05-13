@@ -19,7 +19,7 @@ deploy_to_sinbad2:
   script:
     - echo "Enviando código a Sinbad2..."
     - ssh $REMOTE_USER@$SSH_HOST "mkdir -p ~/deploy_$APP_NAME"
-
+    
     - scp -r ./* $REMOTE_USER@$SSH_HOST:~/deploy_$APP_NAME/
 
     - echo "Levantando contenedores con Docker Compose..."
