@@ -55,7 +55,7 @@ export default function Footer() {
                   <span className="text-[10px] font-medium uppercase leading-none tracking-[0.22em] text-ink-tertiary">de Jaén</span>
                 </div>
                 <img
-                  src="/uja-logo.png"
+                  src={`${import.meta.env.BASE_URL}uja-logo.png`}
                   alt="Logo UJA"
                   className="h-7 w-7 object-contain grayscale opacity-80 transition-all group-hover:grayscale-0 group-hover:opacity-100"
                 />
