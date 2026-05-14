@@ -10,7 +10,7 @@ COPY . .
 # `env_file` en docker-compose solo inyecta variables en el contenedor al ARRANCAR
 # (aquí nginx no usa Vite). `vite build` corre en esta fase y necesita `VITE_*`
 # ya definidas: `.env` no entra en el contexto de build (.dockerignore).
-ENV VITE_BASE_PATH=/orcid2words/
+ENV VITE_BASE_PATH=/orcid2sword/
 RUN npm run build
 
 # ── Serve stage ────────────────────────────────────────────────
