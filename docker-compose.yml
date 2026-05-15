@@ -11,7 +11,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/orcid_db
       REDIS_URL: redis://redis:6379/0
-      ORCID_REDIRECT_URI: https://jargon-supreme-palpable.ngrok-free.dev/callback
+      # Uncomment for local dev with ngrok (overrides backend/.env value):
+      # ORCID_REDIRECT_URI: https://jargon-supreme-palpable.ngrok-free.dev/callback
     depends_on:
       db:
         condition: service_healthy

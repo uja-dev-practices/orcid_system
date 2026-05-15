@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     ORCID_CLIENT_ID: str = Field(...)
     ORCID_CLIENT_SECRET: str = Field(...)
     ORCID_REDIRECT_URI: str = "http://localhost:8000/api/auth/orcid/callback"
+    ORCID_ENVIRONMENT: Literal["sandbox", "production"] | None = None
     ORCID_OAUTH_STATE_ENABLED: bool = True
     ORCID_OAUTH_STATE_COOKIE: str = "orcid_oauth_state"
     ORCID_OAUTH_STATE_TTL_SECONDS: int = 600
@@ -135,6 +136,17 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
+
+    @property
+    def orcid_environment(self) -> str:
+        """Which ORCID API tier to use (sandbox | production).
+
+        Defaults to 'production' when ENVIRONMENT=production, 'sandbox'
+        otherwise. Can be overridden explicitly with ORCID_ENVIRONMENT
+        in the .env to e.g. run production security + sandbox ORCID."""
+        if self.ORCID_ENVIRONMENT is not None:
+            return self.ORCID_ENVIRONMENT
+        return "production" if self.is_production else "sandbox"
 
     @property
     def cors_allowed_origins(self) -> List[str]:

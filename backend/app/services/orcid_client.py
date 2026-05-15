@@ -20,7 +20,7 @@ ORCID_ENDPOINTS = {
 
 
 def _orcid_endpoints() -> dict[str, str]:
-    key = "production" if settings.is_production else "sandbox"
+    key = settings.orcid_environment          # "sandbox" | "production"
     return ORCID_ENDPOINTS[key]
 
 
