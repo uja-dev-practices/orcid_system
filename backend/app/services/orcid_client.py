@@ -1,18 +1,28 @@
-import os
 import urllib.parse
-from pathlib import Path
 from typing import Any, Optional
 
-from dotenv import load_dotenv
 import httpx
 
-TOKEN_URL_SANDBOX = "https://sandbox.orcid.org/oauth/token"
-AUTHORIZATION_URL_SANDBOX = "https://sandbox.orcid.org/oauth/authorize"
-BASE_URL_SANDBOX = "https://pub.sandbox.orcid.org/v3.0"
+from app.core.config import settings
 
-# Si en algún momento pasas a producción, cambiarías a:
-# TOKEN_URL_PROD = "https://orcid.org/oauth/token"
-# BASE_URL_PROD = "https://pub.orcid.org/v3.0"
+ORCID_ENDPOINTS = {
+    "sandbox": {
+        "token_url": "https://sandbox.orcid.org/oauth/token",
+        "authorization_url": "https://sandbox.orcid.org/oauth/authorize",
+        "api_base_url": "https://pub.sandbox.orcid.org/v3.0",
+    },
+    "production": {
+        "token_url": "https://orcid.org/oauth/token",
+        "authorization_url": "https://orcid.org/oauth/authorize",
+        "api_base_url": "https://pub.orcid.org/v3.0",
+    },
+}
+
+
+def _orcid_endpoints() -> dict[str, str]:
+    key = "production" if settings.is_production else "sandbox"
+    return ORCID_ENDPOINTS[key]
+
 
 # ---------------------------------------------------------
 # Clase de cliente de ORCID
@@ -23,17 +33,13 @@ class ORCIDClient:
     # Función auxiliar: inicializar el cliente de ORCID
     # ---------------------------------------------------------
     def __init__(self):
-        # Asegura que al ejecutar `uvicorn` local también se carga `backend/.env`.
-        # (En docker `ORCID_REDIRECT_URI` y secretos llegan por env_file, así que esto no molesta.)
-        _env_path = Path(__file__).resolve().parents[2] / ".env"
-        load_dotenv(dotenv_path=_env_path, override=False)
-
-        self.client_id = os.getenv("ORCID_CLIENT_ID")
-        self.client_secret = os.getenv("ORCID_CLIENT_SECRET")
+        endpoints = _orcid_endpoints()
+        self.client_id = settings.ORCID_CLIENT_ID
+        self.client_secret = settings.ORCID_CLIENT_SECRET
         self._token_cache: Optional[str] = None
-        self.token_url = TOKEN_URL_SANDBOX
-        self.authorization_url = AUTHORIZATION_URL_SANDBOX
-        self.base_url = BASE_URL_SANDBOX
+        self.token_url = endpoints["token_url"]
+        self.authorization_url = endpoints["authorization_url"]
+        self.base_url = endpoints["api_base_url"]
 
     # ---------------------------------------------------------
     # 1. Obtener token público

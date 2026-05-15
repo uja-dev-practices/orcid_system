@@ -44,6 +44,13 @@ docker-data/
 postgres_data/
 redis_data/
 
+# --- ENVIRONMENT VARIABLES ---
+# Secret files shouldn't be committed
+.env
+.env.*
+!.env.example
+!.env.template
+
 # --- OS / EDITOR ---
 .DS_Store
 Thumbs.db
