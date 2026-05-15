@@ -16,8 +16,9 @@ build/
 .vite/
 *.timestamp-*
 
-# Secretos: docker-compose ya inyecta las variables vía `env_file`,
-# no necesitamos copiarlos al filesystem de la imagen.
+# Secretos: no subir `.env` al contexto de `docker build` (evita capas con claves).
+# `env_file` en compose aplica al proceso en ejecución del servicio, no al paso
+# `npm run build` del Dockerfile; las `VITE_*` deben estar disponibles ahí (ENV/ARG).
 .env
 .env.*
 !.env.example
