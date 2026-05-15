@@ -34,7 +34,7 @@ import {
 // de Vite. En ese caso no queremos usar string vacío como base, sino `/api`.
 const BASE_URL = (import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL
-  : "/api").replace(/\/$/, "");
+  : `${import.meta.env.BASE_URL}api`).replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";

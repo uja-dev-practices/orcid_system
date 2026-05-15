@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': { target: proxyTarget, changeOrigin: true },
         '/health': { target: proxyTarget, changeOrigin: true },
+        ...(base !== '/' && {
+          [`${base}api`]: {
+            target: proxyTarget,
+            changeOrigin: true,
+            rewrite: (path) => path.replace(new RegExp(`^${base}api`), '/api')
+          }
+        }),
       },
     },
   }
