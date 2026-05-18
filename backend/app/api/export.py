@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db.models import Publication, PublicationDownload, Researcher
 from app.db.session import get_db
-from app.security.api_key import get_api_key_optional
+from app.security.api_key import get_api_key
 from app.security.jwt import get_optional_current_researcher
 from app.services.sword_generator import SWORDGenerator
 from app.services.zip_generator import ZIPGenerator
@@ -17,11 +17,6 @@ from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
 
 
 router = APIRouter(prefix="/export")
-
-
-def _ensure_credentials(api_key: str | None, current: Researcher | None) -> None:
-    if not api_key and not current:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
 
 def _record_downloads(db: Session, current: Researcher, pubs: Iterable[Publication]) -> None:
@@ -94,10 +89,9 @@ async def export_multiple_sword(
     request: Request,
     pub_ids: List[UUID] = Body(..., min_length=1, max_length=settings.MAX_PUB_IDS_BATCH),
     db: Session = Depends(get_db),
-    api_key: str | None = Depends(get_api_key_optional),
+    _: str = Depends(get_api_key),
     current: Researcher | None = Depends(get_optional_current_researcher),
 ):
-    _ensure_credentials(api_key, current)
     _validate_pub_ids(pub_ids)
 
     pubs = db.query(Publication).filter(Publication.id.in_(pub_ids)).all()
@@ -124,10 +118,9 @@ async def export_researcher_sword(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
     db: Session = Depends(get_db),
-    api_key: str | None = Depends(get_api_key_optional),
+    _: str = Depends(get_api_key),
     current: Researcher | None = Depends(get_optional_current_researcher),
 ):
-    _ensure_credentials(api_key, current)
     if not is_valid_orcid(orcid_id):
         raise HTTPException(status_code=400, detail="Invalid ORCID iD")
 
@@ -156,10 +149,9 @@ async def export_multiple_zip(
     request: Request,
     pub_ids: List[UUID] = Body(..., min_length=1, max_length=settings.MAX_PUB_IDS_BATCH),
     db: Session = Depends(get_db),
-    api_key: str | None = Depends(get_api_key_optional),
+    _: str = Depends(get_api_key),
     current: Researcher | None = Depends(get_optional_current_researcher),
 ):
-    _ensure_credentials(api_key, current)
     _validate_pub_ids(pub_ids)
 
     pubs = db.query(Publication).filter(Publication.id.in_(pub_ids)).all()
@@ -186,10 +178,9 @@ async def export_researcher_zip(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
     db: Session = Depends(get_db),
-    api_key: str | None = Depends(get_api_key_optional),
+    _: str = Depends(get_api_key),
     current: Researcher | None = Depends(get_optional_current_researcher),
 ):
-    _ensure_credentials(api_key, current)
     if not is_valid_orcid(orcid_id):
         raise HTTPException(status_code=400, detail="Invalid ORCID iD")
 

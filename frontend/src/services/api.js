@@ -17,10 +17,10 @@
  *   - GET    /researchers/search                          → buscador grupal (todo en uno)
  *   - GET    /researchers/search/{orcid_id}               → buscador individual (todo en uno)
  *   - POST   /researchers/{orcid_id}/sync                 → re-sync manual
- *   - POST   /export/sword/publications  body=[ids]       → SWORD XML de selección
- *   - POST   /export/zip/publications    body=[ids]       → ZIP de selección
- *   - GET    /export/sword/researcher/{orcid_id}          → SWORD XML de todo el investigador
- *   - GET    /export/zip/researcher/{orcid_id}            → ZIP de todo el investigador
+ *   - POST   /export/sword/publications  body=[ids]       → SWORD XML de selección (requiere X-API-Key)
+ *   - POST   /export/zip/publications    body=[ids]       → ZIP de selección (requiere X-API-Key)
+ *   - GET    /export/sword/researcher/{orcid_id}          → SWORD XML de todo el investigador (requiere X-API-Key)
+ *   - GET    /export/zip/researcher/{orcid_id}            → ZIP de todo el investigador (requiere X-API-Key)
  */
 
 import {
@@ -390,9 +390,9 @@ function exportSegmentFor(format) {
  * dato meramente informativo en los toasts de éxito; las descargas
  * reales se disparan vía blob para poder forzar el download.
  *
- * Ojo: estas URLs requieren `X-API-Key`, así que NO sirven como link
- * directo en una etiqueta `<a href>`; las exponemos para mostrarlas o
- * loguearlas, no para navegar.
+ * El backend exige la cabecera `X-API-Key` (misma que `VITE_API_KEY` en el
+ * front). No sirven como `<a href>` simple: hay que descargar con `fetch`
+ * (p. ej. `downloadExport`) o añadir la cabecera de otro modo.
  */
 export function getExportUrl(orcidId, format) {
   const segment = exportSegmentFor(format);
@@ -418,6 +418,13 @@ export async function downloadExport(
   if (USE_MOCKS) {
     await mockExport(format);
     return { blob: null, url: getExportUrl(orcidId, format) };
+  }
+
+  if (!API_KEY) {
+    throw new ApiError(
+      "Configura VITE_API_KEY (debe coincidir con API_KEY_VALUE del backend): las exportaciones exigen la cabecera X-API-Key.",
+      { status: 401, payload: { missingApiKey: true } },
+    );
   }
 
   const segment = exportSegmentFor(format);
