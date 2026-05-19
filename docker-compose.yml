@@ -7,7 +7,12 @@ services:
     ports:
       - "0.0.0.0:8072:8000"
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: true
+      # Sobrescribe claves de `.env` en local (sandbox, ngrok). En el servidor
+      # no existe el fichero → Compose lo omite sin error.
+      - path: ./backend/.env.local
+        required: false
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/orcid_db
       REDIS_URL: redis://redis:6379/0

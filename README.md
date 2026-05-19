@@ -86,6 +86,7 @@ Default local URLs:
 
 Backend:
 - Main file: `backend/.env`
+- Optional local overrides (gitignored): `backend/.env.local` (loaded after `.env`; Docker Compose also picks it up when the file exists)
 - Reference: `backend/.env.example`
 
 Frontend:
@@ -118,17 +119,9 @@ Important frontend variables:
 
 ---
 
-## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). ngrok Bridge for Local OAuth Callback
+## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Development with ngrok (OAuth)
 
-To test OAuth callback from ORCID in local environments, compose can inject a public callback URL:
-
-```yaml
-environment:
-  ORCID_REDIRECT_URI: https://jargon-supreme-palpable.ngrok-free.dev/callback
-```
-
-> [!NOTE]
-> Values under `docker-compose.yml -> services.backend.environment` override `backend/.env` inside the container.
+For ORCID OAuth in local development you need a **public HTTPS URL** that hits the same origin as the SPA. Run `docker compose up` as usual, then point ngrok at the **frontend** host port (for example `ngrok http 8073` when compose maps the UI to `8073`). Open the app **only** at `https://<your-subdomain>.ngrok-free.dev/orcid2sword/` so login, `/api` proxy, and the OAuth callback stay on one host (mixing `localhost` with an ngrok `ORCID_REDIRECT_URI` breaks the `state` cookie). Put `ORCID_REDIRECT_URI` to exactly `https://<your-subdomain>.ngrok-free.dev/orcid2sword/callback` in `backend/.env.local` (gitignored), register that **same** redirect URL on your ORCID sandbox app, and add the ngrok host to `CORS_ALLOWED_ORIGINS` and `TRUSTED_HOSTS`; restart the backend after edits. If the ngrok subdomain changes, update ORCID, `.env.local`, and restart again.
 
 ---
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hmac
 import secrets
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
 from starlette.requests import Request
@@ -30,12 +31,18 @@ def generate_state() -> str:
 def attach_state_cookie(response: Response, state: str) -> None:
     """
     Persiste el `state` en una cookie segura y devuelve el valor crudo.
+
+    `Secure` debe ser True en cualquier flujo HTTPS (p. ej. ngrok en local);
+    no basta con `ENVIRONMENT=production`, o el navegador puede descartar
+    la cookie y el callback fallará con «OAuth state missing».
     """
+    redirect_https = urlparse(settings.ORCID_REDIRECT_URI).scheme == "https"
+    use_secure = settings.is_production or redirect_https
     response.set_cookie(
         key=settings.ORCID_OAUTH_STATE_COOKIE,
         value=state,
         max_age=settings.ORCID_OAUTH_STATE_TTL_SECONDS,
-        secure=settings.is_production,
+        secure=use_secure,
         httponly=True,
         samesite="lax",
         path="/",
