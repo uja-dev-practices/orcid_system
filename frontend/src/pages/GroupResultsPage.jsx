@@ -190,7 +190,7 @@ export function GroupResultsPage() {
     <div className="flex min-h-screen flex-col bg-surface-tertiary">
       <AppHeader variant="group" />
       <main className="flex-1">
-        <div className="mx-auto w-full max-w-[1100px] px-5 py-7">
+        <div className="mx-auto w-full max-w-7xl px-4 py-7">
           {/* Page header */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">

@@ -19,8 +19,15 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+_ENV_DIR = Path(__file__).resolve().parents[2]
+_ENV_PATH = _ENV_DIR / ".env"
+_ENV_LOCAL_PATH = _ENV_DIR / ".env.local"
+
+# Carga en cascada: `.env` (versionado en GitLab con valores de prod) y
+# opcionalmente `.env.local` (gitignored) para sandbox / ngrok en local.
 load_dotenv(dotenv_path=_ENV_PATH, override=False)
+if _ENV_LOCAL_PATH.is_file():
+    load_dotenv(dotenv_path=_ENV_LOCAL_PATH, override=True)
 
 
 def _split_csv(value: str | List[str] | None) -> List[str]:

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useParams, Navigate } from "react-router-dom";
+import { useLocation, useParams, Navigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppHeader } from "../components/layout/AppHeader";
@@ -9,6 +9,7 @@ import { StatsRow } from "../components/dashboard/StatsRow";
 import { PublicationsTable } from "../components/dashboard/PublicationsTable";
 import { ExportDropdown } from "../components/dashboard/ExportDropdown";
 import { SyncButton } from "../components/dashboard/SyncButton";
+import { ArrowLeftIcon } from "../components/ui/Icons";
 import {
   downloadExport,
   searchResearcher,
@@ -198,7 +199,15 @@ export function DashboardPage() {
     <div className="flex min-h-screen flex-col bg-surface-tertiary">
       <AppHeader variant="dashboard" />
       <main className="flex-1">
-        <div className="mx-auto w-full max-w-[1100px] px-5 py-7">
+        <div className="mx-auto w-full max-w-7xl px-4 py-7">
+          <Link
+            to="/"
+            className="mb-5 inline-flex items-center gap-1.5 text-sm text-ink-tertiary transition-colors hover:text-ink-primary"
+          >
+            <ArrowLeftIcon size={14} />
+            Volver al inicio
+          </Link>
+
           {researcher ? (
             <ResearcherCard
               researcher={researcher}

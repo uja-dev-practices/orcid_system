@@ -4,11 +4,11 @@ import { Spinner } from "../ui/Spinner";
 import { Badge } from "../ui/Badge";
 
 const COLUMNS = [
-  { key: "title", label: "Título" },
-  { key: "journal", label: "Revista / Fuente" },
-  { key: "publication_year", label: "Año" },
+  { key: "title", label: "Título", thClass: "w-[35%]" },
+  { key: "journal", label: "Revista / Fuente", thClass: "w-[28%]", tdClass: "break-words" },
+  { key: "publication_year", label: "Año", thClass: "w-16" },
   { key: "doi", label: "DOI" },
-  { key: "type", label: "Tipo" },
+  { key: "type", label: "Tipo", thClass: "w-20" },
 ];
 
 const PAGE_SIZE = 15;
@@ -376,7 +376,7 @@ export function PublicationsTable({
         ) : loading ? (
           <LoadingState />
         ) : (
-          <table className="w-full min-w-[720px] border-collapse">
+          <table className="w-full border-collapse">
             <thead>
               <tr className="bg-surface-secondary">
                 <th
@@ -395,7 +395,7 @@ export function PublicationsTable({
                   <th
                     key={col.key}
                     onClick={() => toggleSort(col.key)}
-                    className="select-none whitespace-nowrap border-b border-surface-border/60 px-4 py-2.5 text-left text-xs font-medium tracking-wide text-ink-secondary"
+                    className={`select-none border-b border-surface-border/60 px-4 py-2.5 text-left text-xs font-medium tracking-wide text-ink-secondary${col.thClass ? ` ${col.thClass}` : ""}`}
                   >
                     <span className="flex cursor-pointer items-center">
                       {col.label.toUpperCase()}
@@ -461,7 +461,7 @@ export function PublicationsTable({
                           {pub.title}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-ink-secondary">
+                      <td className="px-4 py-3.5 text-[13px] text-ink-secondary">
                         {pub.journal || "—"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-ink-primary">
