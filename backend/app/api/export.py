@@ -9,8 +9,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db.models import Publication, PublicationDownload, Researcher
 from app.db.session import get_db
-from app.security.api_key import get_api_key
-from app.security.jwt import get_optional_current_researcher
+from app.security.export_auth import require_export_access
 from app.services.sword_generator import SWORDGenerator
 from app.services.zip_generator import ZIPGenerator
 from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
@@ -89,8 +88,7 @@ async def export_multiple_sword(
     request: Request,
     pub_ids: List[UUID] = Body(..., min_length=1, max_length=settings.MAX_PUB_IDS_BATCH),
     db: Session = Depends(get_db),
-    _: str = Depends(get_api_key),
-    current: Researcher | None = Depends(get_optional_current_researcher),
+    current: Researcher | None = Depends(require_export_access),
 ):
     _validate_pub_ids(pub_ids)
 
@@ -118,8 +116,7 @@ async def export_researcher_sword(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
     db: Session = Depends(get_db),
-    _: str = Depends(get_api_key),
-    current: Researcher | None = Depends(get_optional_current_researcher),
+    current: Researcher | None = Depends(require_export_access),
 ):
     if not is_valid_orcid(orcid_id):
         raise HTTPException(status_code=400, detail="Invalid ORCID iD")
@@ -149,8 +146,7 @@ async def export_multiple_zip(
     request: Request,
     pub_ids: List[UUID] = Body(..., min_length=1, max_length=settings.MAX_PUB_IDS_BATCH),
     db: Session = Depends(get_db),
-    _: str = Depends(get_api_key),
-    current: Researcher | None = Depends(get_optional_current_researcher),
+    current: Researcher | None = Depends(require_export_access),
 ):
     _validate_pub_ids(pub_ids)
 
@@ -178,8 +174,7 @@ async def export_researcher_zip(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
     db: Session = Depends(get_db),
-    _: str = Depends(get_api_key),
-    current: Researcher | None = Depends(get_optional_current_researcher),
+    current: Researcher | None = Depends(require_export_access),
 ):
     if not is_valid_orcid(orcid_id):
         raise HTTPException(status_code=400, detail="Invalid ORCID iD")

@@ -27,6 +27,10 @@ def _is_valid_key(provided: str | None) -> bool:
     return hmac.compare_digest(provided.encode("utf-8"), settings.API_KEY_VALUE.encode("utf-8"))
 
 
+def is_valid_api_key(provided: str | None) -> bool:
+    return _is_valid_key(provided)
+
+
 def get_api_key(api_key: str | None = Depends(api_key_header)) -> str:
     if not _is_valid_key(api_key):
         raise HTTPException(

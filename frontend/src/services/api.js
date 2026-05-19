@@ -10,17 +10,18 @@
  *     (p. ej. `http://localhost:8000/api`). Si se deja vacío, las
  *     peticiones se hacen contra `/api` y las redirige el proxy de
  *     Vite (ver `vite.config.js`).
- *   - `VITE_API_KEY`: clave compartida con el backend, se manda en el
- *     header `X-API-Key` de TODAS las peticiones.
+ *   - `VITE_API_KEY` / `API_KEY_VALUE`: opcional en el navegador. En
+ *     producción y dev la inyecta el proxy (nginx / Vite). Solo hace falta
+ *     en el bundle si el front llama al backend sin proxy intermedio.
  *
  * Contrato actual del backend (todo bajo `/api`):
  *   - GET    /researchers/search                          → buscador grupal (todo en uno)
  *   - GET    /researchers/search/{orcid_id}               → buscador individual (todo en uno)
  *   - POST   /researchers/{orcid_id}/sync                 → re-sync manual
- *   - POST   /export/sword/publications  body=[ids]       → SWORD XML de selección (requiere X-API-Key)
- *   - POST   /export/zip/publications    body=[ids]       → ZIP de selección (requiere X-API-Key)
- *   - GET    /export/sword/researcher/{orcid_id}          → SWORD XML de todo el investigador (requiere X-API-Key)
- *   - GET    /export/zip/researcher/{orcid_id}            → ZIP de todo el investigador (requiere X-API-Key)
+ *   - POST   /export/sword/publications  body=[ids]       → SWORD XML (API key o JWT)
+ *   - POST   /export/zip/publications    body=[ids]       → ZIP (API key o JWT)
+ *   - GET    /export/sword/researcher/{orcid_id}          → SWORD XML (API key o JWT)
+ *   - GET    /export/zip/researcher/{orcid_id}            → ZIP (API key o JWT)
  */
 
 import {
@@ -35,6 +36,7 @@ import {
 const BASE_URL = (import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL
   : `${import.meta.env.BASE_URL}api`).replace(/\/$/, "");
+// Fallback solo si no hay proxy que inyecte la cabecera (p. ej. VITE_API_URL absoluta).
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
@@ -81,16 +83,10 @@ export class ApiError extends Error {
 }
 
 /**
- * Construye la cabecera base que llevan TODAS las peticiones (incluidas
- * las descargas de blob). Incluye X-API-Key siempre y, si existe un JWT
- * en localStorage, también Authorization: Bearer <token>.
+ * Cabeceras base del navegador. El proxy (nginx/Vite) inyecta X-API-Key en
+ * rutas /api; aquí solo la añadimos como fallback directo al backend.
  */
 function buildAuthHeaders(extra = {}) {
-  if (!API_KEY && import.meta.env.DEV) {
-    console.warn(
-      "[api] VITE_API_KEY no está definida; las peticiones serán rechazadas por el backend.",
-    );
-  }
   const token = localStorage.getItem("orcid_auth_token");
   return {
     Accept: "application/json",
@@ -390,9 +386,8 @@ function exportSegmentFor(format) {
  * dato meramente informativo en los toasts de éxito; las descargas
  * reales se disparan vía blob para poder forzar el download.
  *
- * El backend exige la cabecera `X-API-Key` (misma que `VITE_API_KEY` en el
- * front). No sirven como `<a href>` simple: hay que descargar con `fetch`
- * (p. ej. `downloadExport`) o añadir la cabecera de otro modo.
+ * Requiere API key (inyectada por proxy) o JWT. No sirve como `<a href>` simple;
+ * usar `downloadExport` para POST con IDs o Bearer opcional.
  */
 export function getExportUrl(orcidId, format) {
   const segment = exportSegmentFor(format);
@@ -418,13 +413,6 @@ export async function downloadExport(
   if (USE_MOCKS) {
     await mockExport(format);
     return { blob: null, url: getExportUrl(orcidId, format) };
-  }
-
-  if (!API_KEY) {
-    throw new ApiError(
-      "Configura VITE_API_KEY (debe coincidir con API_KEY_VALUE del backend): las exportaciones exigen la cabecera X-API-Key.",
-      { status: 401, payload: { missingApiKey: true } },
-    );
   }
 
   const segment = exportSegmentFor(format);

@@ -20,4 +20,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /app/dist
 
 EXPOSE 5173
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/sh", "-c", "sed -i \"s|__API_KEY__|${API_KEY_VALUE:-$VITE_API_KEY}|g\" /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
