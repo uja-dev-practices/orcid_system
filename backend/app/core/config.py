@@ -94,6 +94,12 @@ class Settings(BaseSettings):
     MAX_PUB_IDS_BATCH: int = 500
     MAX_REQUEST_BODY_BYTES: int = 1_048_576  # 1 MiB
 
+    SYNC_SCHEDULER_ENABLED: bool = True
+    SYNC_SCHEDULE_MODE: Literal["monthly_cron", "interval_minutes"] = "monthly_cron"
+    SYNC_CRON_DAY: int = 1
+    SYNC_CRON_HOUR: int = 3
+    SYNC_INTERVAL_MINUTES: int = 60
+
     DOCS_ENABLED: bool = True
 
     SECURITY_HSTS_SECONDS: int = 31_536_000

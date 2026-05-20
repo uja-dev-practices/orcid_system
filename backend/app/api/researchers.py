@@ -19,7 +19,7 @@ from app.schema.researcher import (
 )
 from app.security.jwt import get_optional_current_researcher
 from app.services.normalizer import PublicationNormalizer
-from app.services.orcid_client import get_display_name, get_work_detail, get_works_summary
+from app.services.orcid_client import get_display_name, get_orcid_client
 from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
 
 
@@ -55,10 +55,15 @@ def _upsert_researcher_publications(
     orcid_id: str,
     db: Session,
 ) -> List[Publication]:
-    works = get_works_summary(orcid_id)
+    orcid_client = get_orcid_client()
+    works = orcid_client.fetch_works(orcid_id)
     groups = works.get("group", [])
 
     publications: List[Publication] = []
+    existing_by_put_code = {
+        publication.put_code: publication
+        for publication in db.query(Publication).filter(Publication.researcher_id == researcher.id).all()
+    }
 
     for g in groups:
         summaries = g.get("work-summary") or []
@@ -71,20 +76,13 @@ def _upsert_researcher_publications(
             continue
 
         try:
-            detail = get_work_detail(orcid_id, put_code)
+            detail = orcid_client.fetch_work_detail(orcid_id, put_code)
         except Exception:
             detail = None
 
         data = PublicationNormalizer.normalize(summary, detail)
 
-        existing = (
-            db.query(Publication)
-            .filter(
-                Publication.researcher_id == researcher.id,
-                Publication.put_code == data["put_code"],
-            )
-            .first()
-        )
+        existing = existing_by_put_code.get(data["put_code"])
 
         if existing:
             for field in [
@@ -108,6 +106,7 @@ def _upsert_researcher_publications(
             pub.status = None
             db.add(pub)
             publications.append(pub)
+            existing_by_put_code[data["put_code"]] = pub
 
     researcher.last_sync_at = datetime.utcnow()
     db.commit()
@@ -261,13 +260,18 @@ def sync_researcher(
     if not researcher:
         raise HTTPException(status_code=404, detail="Researcher not found")
 
-    works = get_works_summary(orcid_id)
+    orcid_client = get_orcid_client()
+    works = orcid_client.fetch_works(orcid_id)
     groups = works.get("group", [])
 
     publications_output = []
     new_count = 0
     updated_count = 0
     unchanged_count = 0
+    existing_by_put_code = {
+        publication.put_code: publication
+        for publication in db.query(Publication).filter(Publication.researcher_id == researcher.id).all()
+    }
 
     for g in groups:
         summaries = g.get("work-summary") or []
@@ -280,20 +284,13 @@ def sync_researcher(
             continue
 
         try:
-            detail = get_work_detail(orcid_id, put_code)
+            detail = orcid_client.fetch_work_detail(orcid_id, put_code)
         except Exception:
             detail = None
 
         data = PublicationNormalizer.normalize(summary, detail)
 
-        existing = (
-            db.query(Publication)
-            .filter(
-                Publication.researcher_id == researcher.id,
-                Publication.put_code == data["put_code"],
-            )
-            .first()
-        )
+        existing = existing_by_put_code.get(data["put_code"])
 
         if existing:
             if publication_changed(existing, data):
@@ -316,8 +313,8 @@ def sync_researcher(
             pub.status = "new"
             db.add(pub)
             new_count += 1
+            existing_by_put_code[data["put_code"]] = pub
 
-        db.flush()
         publications_output.append(pub)
 
     researcher.last_sync_at = datetime.utcnow()

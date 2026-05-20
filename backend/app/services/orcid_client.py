@@ -37,6 +37,7 @@ class ORCIDClient:
         self.client_id = settings.ORCID_CLIENT_ID
         self.client_secret = settings.ORCID_CLIENT_SECRET
         self._token_cache: Optional[str] = None
+        self._http = httpx.Client(timeout=20.0)
         self.token_url = endpoints["token_url"]
         self.authorization_url = endpoints["authorization_url"]
         self.base_url = endpoints["api_base_url"]
@@ -55,12 +56,11 @@ class ORCIDClient:
             "scope": "/read-public",
         }
 
-        with httpx.Client(timeout=20.0) as client:
-            response = client.post(self.token_url, data=data)
-            response.raise_for_status()
-            token = response.json()["access_token"]
-            self._token_cache = token
-            return token
+        response = self._http.post(self.token_url, data=data)
+        response.raise_for_status()
+        token = response.json()["access_token"]
+        self._token_cache = token
+        return token
 
     # ---------------------------------------------------------
     # Headers comunes
@@ -77,31 +77,28 @@ class ORCIDClient:
     # ---------------------------------------------------------
     def fetch_record(self, orcid_id: str) -> dict:
         url = f"{self.base_url}/{orcid_id}/record"
-        with httpx.Client(timeout=20.0) as client:
-            response = client.get(url, headers=self._headers())
-            response.raise_for_status()
-            return response.json()
+        response = self._http.get(url, headers=self._headers())
+        response.raise_for_status()
+        return response.json()
 
     # ---------------------------------------------------------
     # 3. Consultar /works (summary)
     # ---------------------------------------------------------
     def fetch_works(self, orcid_id: str) -> dict:
         url = f"{self.base_url}/{orcid_id}/works"
-        with httpx.Client(timeout=20.0) as client:
-            response = client.get(url, headers=self._headers())
-            response.raise_for_status()
-            return response.json()
+        response = self._http.get(url, headers=self._headers())
+        response.raise_for_status()
+        return response.json()
 
     # ---------------------------------------------------------
     # 4. Consultar /work/{put_code} (detalle)
     # ---------------------------------------------------------
     def fetch_work_detail(self, orcid_id: str, put_code: int) -> dict | None:
         url = f"{self.base_url}/{orcid_id}/work/{put_code}"
-        with httpx.Client(timeout=20.0) as client:
-            response = client.get(url, headers=self._headers())
-            if response.status_code != 200:
-                return None
-            return response.json()
+        response = self._http.get(url, headers=self._headers())
+        if response.status_code != 200:
+            return None
+        return response.json()
 
     # ---------------------------------------------------------
     # OAuth 3-legged (authorization code)
@@ -147,27 +144,36 @@ class ORCIDClient:
             "code": code,
             "redirect_uri": redirect_uri,
         }
-        with httpx.Client(timeout=20.0) as client:
-            response = client.post(self.token_url, data=data, headers={"Accept": "application/json"})
-            response.raise_for_status()
-            return response.json()
+        response = self._http.post(self.token_url, data=data, headers={"Accept": "application/json"})
+        response.raise_for_status()
+        return response.json()
 
 
 # -------------------------------------------------------------------
 # Funciones de módulo usadas en researchers.py
 # -------------------------------------------------------------------
+_shared_client: ORCIDClient | None = None
+
+
+def get_orcid_client() -> ORCIDClient:
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = ORCIDClient()
+    return _shared_client
+
+
 def get_works_summary(orcid_id: str) -> dict:
-    client = ORCIDClient()
+    client = get_orcid_client()
     return client.fetch_works(orcid_id)
 
 
 def get_work_detail(orcid_id: str, put_code: int) -> dict | None:
-    client = ORCIDClient()
+    client = get_orcid_client()
     return client.fetch_work_detail(orcid_id, put_code)
 
 
 def get_record(orcid_id: str) -> dict:
-    client = ORCIDClient()
+    client = get_orcid_client()
     return client.fetch_record(orcid_id)
 
 

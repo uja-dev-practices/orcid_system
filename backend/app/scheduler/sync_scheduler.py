@@ -4,6 +4,9 @@ from app.db.session import SessionLocal
 from app.db.repositories.researcher_repository import ResearcherRepository
 from dotenv import load_dotenv
 import os
+import logging
+
+from app.core.config import settings
 
 
 # Cargar variables del .env
@@ -15,6 +18,7 @@ load_dotenv()
 
 API_KEY = os.getenv("API_KEY_VALUE")
 BASE_URL = os.getenv("BASE_URL")
+logger = logging.getLogger("app.scheduler.sync")
 
 # ---------------------------------------------------------
 # Función auxiliar: ejecutar sincronización mensual
@@ -48,6 +52,37 @@ def run_monthly_sync():
 # ---------------------------------------------------------
 
 def start_scheduler():
+    if not settings.SYNC_SCHEDULER_ENABLED:
+        logger.info("Autosync scheduler disabled by SYNC_SCHEDULER_ENABLED=false")
+        return
+
     scheduler = BackgroundScheduler()
-    scheduler.add_job(run_monthly_sync, "cron", day=1, hour=3)  # día 1 a las 03:00
+
+    if settings.SYNC_SCHEDULE_MODE == "interval_minutes":
+        scheduler.add_job(
+            run_monthly_sync,
+            "interval",
+            minutes=settings.SYNC_INTERVAL_MINUTES,
+            id="researchers-autosync",
+            replace_existing=True,
+        )
+        logger.info(
+            "Autosync scheduler started in interval mode: every %s minute(s)",
+            settings.SYNC_INTERVAL_MINUTES,
+        )
+    else:
+        scheduler.add_job(
+            run_monthly_sync,
+            "cron",
+            day=settings.SYNC_CRON_DAY,
+            hour=settings.SYNC_CRON_HOUR,
+            id="researchers-autosync",
+            replace_existing=True,
+        )
+        logger.info(
+            "Autosync scheduler started in monthly mode: day=%s hour=%s",
+            settings.SYNC_CRON_DAY,
+            settings.SYNC_CRON_HOUR,
+        )
+
     scheduler.start()
