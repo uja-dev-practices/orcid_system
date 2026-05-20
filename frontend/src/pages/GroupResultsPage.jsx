@@ -14,6 +14,8 @@ import {
   UsersIcon,
 } from "../components/ui/Icons";
 import { downloadExport, searchResearchersBulk } from "../services/api";
+import { DEFAULT_EXPORT_PROFILE, swordXmlFilename } from "../utils/exportProfiles";
+import { SwordProfileSelect } from "../components/dashboard/SwordProfileSelect";
 import { useAuth } from "../contexts/AuthContext";
 
 /**
@@ -34,6 +36,7 @@ export function GroupResultsPage() {
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [globalExporting, setGlobalExporting] = useState(null); // format | null
+  const [swordProfile, setSwordProfile] = useState(DEFAULT_EXPORT_PROFILE);
 
   // Track per-researcher export state (format | null)
   const [cardExporting, setCardExporting] = useState({});
@@ -99,7 +102,7 @@ export function GroupResultsPage() {
     [results],
   );
 
-  async function handleGlobalExport(format) {
+  async function handleGlobalExport(format, profile = DEFAULT_EXPORT_PROFILE) {
     const ids = isAuthenticated ? allNewIds : allIds;
     if (ids.length === 0) {
       toast.info(
@@ -116,12 +119,16 @@ export function GroupResultsPage() {
       // since the endpoint is POST /export/{format}/publications (no orcid needed)
       const { blob } = await downloadExport(null, format, {
         publicationIds: ids,
+        profile: format === "xml" ? profile : undefined,
       });
       if (blob) {
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        anchor.download = `sword-group.${format === "xml" ? "xml" : format}`;
+        anchor.download =
+          format === "xml"
+            ? swordXmlFilename("group", profile)
+            : `sword-group.${format}`;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
@@ -139,7 +146,13 @@ export function GroupResultsPage() {
     }
   }
 
-  async function handleCardExport(orcidId, format, newIds, totalIds) {
+  async function handleCardExport(
+    orcidId,
+    format,
+    newIds,
+    totalIds,
+    profile = DEFAULT_EXPORT_PROFILE,
+  ) {
     const ids = isAuthenticated ? newIds : totalIds;
     if (ids.length === 0) {
       toast.info("No hay publicaciones para exportar");
@@ -149,12 +162,16 @@ export function GroupResultsPage() {
     try {
       const { blob } = await downloadExport(orcidId, format, {
         publicationIds: ids,
+        profile: format === "xml" ? profile : undefined,
       });
       if (blob) {
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        anchor.download = `sword-${orcidId}.${format === "xml" ? "xml" : format}`;
+        anchor.download =
+          format === "xml"
+            ? swordXmlFilename(orcidId, profile)
+            : `sword-${orcidId}.${format}`;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
@@ -216,12 +233,17 @@ export function GroupResultsPage() {
 
             {/* Global export buttons */}
             {!loading && results.length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <SwordProfileSelect
+                  id="group-sword-profile"
+                  value={swordProfile}
+                  onChange={setSwordProfile}
+                />
                 {["xml", "zip"].map((fmt) => (
                   <button
                     key={fmt}
                     type="button"
-                    onClick={() => handleGlobalExport(fmt)}
+                    onClick={() => handleGlobalExport(fmt, swordProfile)}
                     disabled={globalDisabled}
                     className="inline-flex items-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-4 py-2 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -269,8 +291,10 @@ export function GroupResultsPage() {
                       fmt,
                       newIds,
                       totalIds,
+                      swordProfile,
                     )
                   }
+                  swordProfile={swordProfile}
                 />
               ))}
             </div>
@@ -326,7 +350,13 @@ export function GroupResultsPage() {
 
 /* ─────────────────────────── Researcher card ─────────────────────────── */
 
-function ResearcherResultCard({ bundle, isAuthenticated, exporting, onExport }) {
+function ResearcherResultCard({
+  bundle,
+  isAuthenticated,
+  exporting,
+  onExport,
+  swordProfile,
+}) {
   const researcher = bundle.researcher ?? {};
   const publications = bundle.publications ?? [];
   const totalRecords = bundle.totalRecords ?? publications.length;

@@ -1,7 +1,7 @@
 from typing import Iterable, List
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.security.export_auth import require_export_access
 from app.services.orcid_client import get_display_name
 from app.services.publication_enrichment import enrich_publications_from_orcid
-from app.services.sword_generator import SWORDGenerator
+from app.services.repository_export import EXPORT_PROFILES, generate_repository_xml
 from app.services.zip_generator import ZIPGenerator
 from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
 
@@ -96,6 +96,18 @@ def _raise_clear_error_if_researcher_id_was_used(db: Session, pub_ids: List[UUID
         )
 
 
+def _export_xml_response(
+    researcher: Researcher,
+    pubs: List[Publication],
+    profile: str,
+) -> Response:
+    try:
+        xml_bytes = generate_repository_xml(researcher, pubs, profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(content=xml_bytes, media_type="application/xml")
+
+
 # ---------------------------------------------------------
 # ENDPOINT 1: SWORD múltiples publicaciones
 # ---------------------------------------------------------
@@ -105,6 +117,13 @@ def _raise_clear_error_if_researcher_id_was_used(db: Session, pub_ids: List[UUID
 async def export_multiple_sword(
     request: Request,
     pub_ids: List[UUID] = Body(..., min_length=1, max_length=settings.MAX_PUB_IDS_BATCH),
+    profile: str = Query(
+        "generic",
+        description=(
+            "Perfil de repositorio: generic (Atom ORCID), dublin_core, dspace, eprints. "
+            f"Valores: {', '.join(EXPORT_PROFILES)}"
+        ),
+    ),
     db: Session = Depends(get_db),
     current: Researcher | None = Depends(require_export_access),
 ):
@@ -121,11 +140,11 @@ async def export_multiple_sword(
 
     _prepare_researcher_and_publications_for_export(db, researcher, pubs)
 
-    xml_bytes = SWORDGenerator.generate_feed_xml(researcher, pubs)
+    response = _export_xml_response(researcher, pubs, profile)
     if current:
         _record_downloads(db, current, pubs)
 
-    return Response(content=xml_bytes, media_type="application/xml")
+    return response
 
 
 # ---------------------------------------------------------
@@ -137,6 +156,13 @@ async def export_multiple_sword(
 async def export_researcher_sword(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
+    profile: str = Query(
+        "generic",
+        description=(
+            "Perfil de repositorio: generic (Atom ORCID), dublin_core, dspace, eprints. "
+            f"Valores: {', '.join(EXPORT_PROFILES)}"
+        ),
+    ),
     db: Session = Depends(get_db),
     current: Researcher | None = Depends(require_export_access),
 ):
@@ -153,11 +179,11 @@ async def export_researcher_sword(
 
     _prepare_researcher_and_publications_for_export(db, researcher, pubs)
 
-    xml_bytes = SWORDGenerator.generate_feed_xml(researcher, pubs)
+    response = _export_xml_response(researcher, pubs, profile)
     if current:
         _record_downloads(db, current, pubs)
 
-    return Response(content=xml_bytes, media_type="application/xml")
+    return response
 
 
 # ---------------------------------------------------------

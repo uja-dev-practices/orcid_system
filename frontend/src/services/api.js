@@ -402,13 +402,15 @@ export function getExportUrl(orcidId, format) {
  *   `["id1", "id2", ...]` (array crudo, tal como espera el backend).
  * - Si viene vacío/undefined usamos el endpoint masivo
  *   `GET /export/{sword|zip}/researcher/{orcid_id}` y descargamos todo.
+ * - Para SWORD XML, `profile` añade `?profile=dublin_core|dspace|eprints`
+ *   (genérico = sin query).
  *
  * Lanza `ApiError` en fallo.
  */
 export async function downloadExport(
   orcidId,
   format,
-  { signal, publicationIds } = {},
+  { signal, publicationIds, profile } = {},
 ) {
   if (USE_MOCKS) {
     await mockExport(format);
@@ -421,9 +423,14 @@ export async function downloadExport(
       ? publicationIds
       : null;
 
-  const url = ids
+  let url = ids
     ? `${BASE_URL}/export/${segment}/publications`
     : `${BASE_URL}/export/${segment}/researcher/${encodeURIComponent(orcidId)}`;
+
+  if (format === "xml" && profile && profile !== "generic") {
+    const separator = url.includes("?") ? "&" : "?";
+    url += `${separator}profile=${encodeURIComponent(profile)}`;
+  }
 
   const init = {
     method: ids ? "POST" : "GET",

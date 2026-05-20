@@ -16,6 +16,7 @@ import {
   syncResearcher,
 } from "../services/api";
 import { isValidOrcid } from "../utils/orcid";
+import { DEFAULT_EXPORT_PROFILE, swordXmlFilename } from "../utils/exportProfiles";
 import { useAuth } from "../contexts/AuthContext";
 
 const SUCCESS_FLASH_MS = 3000;
@@ -49,6 +50,7 @@ export function DashboardPage() {
 
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | success
   const [exportingFormat, setExportingFormat] = useState(null);
+  const [swordProfile, setSwordProfile] = useState(DEFAULT_EXPORT_PROFILE);
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
@@ -138,7 +140,7 @@ export function DashboardPage() {
     }
   }
 
-  async function handleExport(format) {
+  async function handleExport(format, profile = DEFAULT_EXPORT_PROFILE) {
     setExportingFormat(format);
     try {
       let ids;
@@ -162,13 +164,17 @@ export function DashboardPage() {
 
       const { blob } = await downloadExport(orcid, format, {
         publicationIds: ids,
+        profile: format === "xml" ? profile : undefined,
       });
       if (blob) {
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
         const extension = format === "xml" ? "xml" : format;
-        anchor.download = `sword-${orcid}.${extension}`;
+        anchor.download =
+          format === "xml"
+            ? swordXmlFilename(orcid, profile)
+            : `sword-${orcid}.${extension}`;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
@@ -220,6 +226,8 @@ export function DashboardPage() {
                     selectedCount={selectedIds.size}
                     isAuthenticated={isAuthenticated}
                     newPublicationsCount={newPublicationIds.length}
+                    swordProfile={swordProfile}
+                    onSwordProfileChange={setSwordProfile}
                   />
                 </>
               }

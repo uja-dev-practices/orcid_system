@@ -7,13 +7,15 @@ import {
   SparkleIcon,
 } from "../ui/Icons";
 import { Spinner } from "../ui/Spinner";
+import { SwordProfileSelect } from "./SwordProfileSelect";
+import { DEFAULT_EXPORT_PROFILE } from "../../utils/exportProfiles";
 
 const FORMATS = [
   {
     format: "xml",
     icon: <DocumentIcon size={20} className="shrink-0 text-ink-secondary" />,
     label: "SWORD XML",
-    desc: "Metadatos en formato Atom",
+    desc: "Según destino seleccionado",
   },
   {
     format: "zip",
@@ -31,6 +33,8 @@ const FORMATS = [
  *   - `newPublicationsCount` → cuántas publicaciones tiene downloaded_by_me=false.
  *   - `selectedCount`        → publicaciones seleccionadas manualmente.
  *   - `exportingFormat`      → formato en curso (pone el botón en loading).
+ *   - `swordProfile`         → perfil SWORD (dublin_core, dspace, eprints…).
+ *   - `onSwordProfileChange` → callback al cambiar destino.
  */
 export function ExportDropdown({
   onExport,
@@ -38,6 +42,8 @@ export function ExportDropdown({
   selectedCount = 0,
   isAuthenticated = false,
   newPublicationsCount = 0,
+  swordProfile = DEFAULT_EXPORT_PROFILE,
+  onSwordProfileChange,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -57,7 +63,7 @@ export function ExportDropdown({
 
   function handlePick(format) {
     setOpen(false);
-    onExport(format);
+    onExport(format, format === "xml" ? swordProfile : undefined);
   }
 
   // Label logic:
@@ -80,7 +86,14 @@ export function ExportDropdown({
   }
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <SwordProfileSelect
+        id="dashboard-sword-profile"
+        value={swordProfile}
+        onChange={onSwordProfileChange}
+      />
+
+      <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -124,6 +137,7 @@ export function ExportDropdown({
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
