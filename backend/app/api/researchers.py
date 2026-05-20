@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -54,6 +54,8 @@ def _upsert_researcher_publications(
     researcher: Researcher,
     orcid_id: str,
     db: Session,
+    *,
+    enrich_work_details: bool = False,
 ) -> List[Publication]:
     orcid_client = get_orcid_client()
     works = orcid_client.fetch_works(orcid_id)
@@ -65,6 +67,11 @@ def _upsert_researcher_publications(
         for publication in db.query(Publication).filter(Publication.researcher_id == researcher.id).all()
     }
 
+    # Tope duro para evitar timeouts y abuso aunque el .env pida un valor enorme.
+    detail_cap = max(0, min(settings.ORCID_WORK_DETAIL_ENRICH_MAX, 200))
+    detail_budget = detail_cap if enrich_work_details else 0
+    detail_attempts = 0
+
     for g in groups:
         summaries = g.get("work-summary") or []
         if not summaries:
@@ -75,10 +82,13 @@ def _upsert_researcher_publications(
         if put_code is None:
             continue
 
-        try:
-            detail = orcid_client.fetch_work_detail(orcid_id, put_code)
-        except Exception:
-            detail = None
+        detail = None
+        if detail_budget > 0 and detail_attempts < detail_budget:
+            try:
+                detail = orcid_client.fetch_work_detail(orcid_id, put_code)
+            except Exception:
+                detail = None
+            detail_attempts += 1
 
         data = PublicationNormalizer.normalize(summary, detail)
 
@@ -143,7 +153,13 @@ def _decorate_downloaded_by_me(
     return out
 
 
-def build_search_response(orcid_id: str, db: Session, current: Researcher | None) -> ResearcherWithPublicationsSchema:
+def build_search_response(
+    orcid_id: str,
+    db: Session,
+    current: Researcher | None,
+    *,
+    enrich_work_details: bool = False,
+) -> ResearcherWithPublicationsSchema:
     if not is_valid_orcid(orcid_id):
         raise HTTPException(status_code=400, detail="Invalid ORCID iD")
 
@@ -164,7 +180,12 @@ def build_search_response(orcid_id: str, db: Session, current: Researcher | None
             researcher.name = display_name
             db.flush()
 
-    publications = _upsert_researcher_publications(researcher, orcid_id, db)
+    publications = _upsert_researcher_publications(
+        researcher,
+        orcid_id,
+        db,
+        enrich_work_details=enrich_work_details,
+    )
     publications_out = _decorate_downloaded_by_me(db=db, current=current, publications=publications)
     stats = build_researcher_stats(publications_out)
 
@@ -203,7 +224,14 @@ def search_and_sync_researchers(
 
     for orcid_id in unique_orcid_ids:
         try:
-            results.append(build_search_response(orcid_id, db, current))
+            results.append(
+                build_search_response(
+                    orcid_id,
+                    db,
+                    current,
+                    enrich_work_details=payload.enrich_work_details,
+                )
+            )
         except HTTPException as exc:
             db.rollback()
             errors.append(
@@ -250,6 +278,14 @@ def search_and_sync_researchers(
 def sync_researcher(
     request: Request,
     orcid_id: str = Path(min_length=19, max_length=19, pattern=ORCID_PATTERN),
+    enrich_work_details: bool = Query(
+        False,
+        description=(
+            "Si es true, consulta ORCID GET /work/{put_code} hasta min(ORCID_WORK_DETAIL_ENRICH_MAX, 200) "
+            "veces por perfil; el resto usa solo el resumen de /works. Por defecto false (recomendado para "
+            "perfiles con muchas publicaciones)."
+        ),
+    ),
     db: Session = Depends(get_db),
     current: Researcher | None = Depends(get_optional_current_researcher),
 ):
@@ -273,6 +309,11 @@ def sync_researcher(
         for publication in db.query(Publication).filter(Publication.researcher_id == researcher.id).all()
     }
 
+    # Tope duro para evitar timeouts y abuso aunque el .env pida un valor enorme.
+    detail_cap = max(0, min(settings.ORCID_WORK_DETAIL_ENRICH_MAX, 200))
+    detail_budget = detail_cap if enrich_work_details else 0
+    detail_attempts = 0
+
     for g in groups:
         summaries = g.get("work-summary") or []
         if not summaries:
@@ -283,10 +324,13 @@ def sync_researcher(
         if put_code is None:
             continue
 
-        try:
-            detail = orcid_client.fetch_work_detail(orcid_id, put_code)
-        except Exception:
-            detail = None
+        detail = None
+        if detail_budget > 0 and detail_attempts < detail_budget:
+            try:
+                detail = orcid_client.fetch_work_detail(orcid_id, put_code)
+            except Exception:
+                detail = None
+            detail_attempts += 1
 
         data = PublicationNormalizer.normalize(summary, detail)
 

@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     SYNC_CRON_HOUR: int = 3
     SYNC_INTERVAL_MINUTES: int = 60
 
+    # Por publicación, GET /work/{put_code} es muy costoso (timeouts con cientos de works).
+    # Por defecto solo se usa el resumen de GET /works. Si se pide enrich, como máximo
+    # se harán tantas peticiones de detalle (el resto se normaliza solo con summary).
+    ORCID_WORK_DETAIL_ENRICH_MAX: int = 50
+
     DOCS_ENABLED: bool = True
 
     SECURITY_HSTS_SECONDS: int = 31_536_000

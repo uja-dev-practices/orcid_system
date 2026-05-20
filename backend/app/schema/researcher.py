@@ -42,6 +42,9 @@ class ResearcherBatchSearchRequestSchema(BaseModel):
         min_length=1,
         max_length=settings.MAX_ORCID_BATCH,
     )
+    # Si es true, se consulta /work/{put_code} hasta ORCID_WORK_DETAIL_ENRICH_MAX veces
+    # por investigador (contribuidores, citación, etc.); el resto solo usa summary.
+    enrich_work_details: bool = False
 
     @field_validator("orcid_ids")
     @classmethod
