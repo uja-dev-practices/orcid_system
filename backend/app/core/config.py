@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     # Por defecto solo se usa el resumen de GET /works. Si se pide enrich, como máximo
     # se harán tantas peticiones de detalle (el resto se normaliza solo con summary).
     ORCID_WORK_DETAIL_ENRICH_MAX: int = 50
+    # Máximo de obras nuevas (por sync) a las que se pide /work/{put_code}; el resto en export.
+    ORCID_NEW_SYNC_DETAIL_MAX: int = 100
 
     DOCS_ENABLED: bool = True
 

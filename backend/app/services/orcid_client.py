@@ -98,7 +98,11 @@ class ORCIDClient:
         response = self._http.get(url, headers=self._headers())
         if response.status_code != 200:
             return None
-        return response.json()
+        payload = response.json()
+        # ORCID v3 devuelve el work anidado bajo la clave "work".
+        if isinstance(payload, dict) and "work" in payload:
+            return payload["work"]
+        return payload
 
     # ---------------------------------------------------------
     # OAuth 3-legged (authorization code)

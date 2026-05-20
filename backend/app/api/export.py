@@ -10,6 +10,8 @@ from app.core.rate_limit import limiter
 from app.db.models import Publication, PublicationDownload, Researcher
 from app.db.session import get_db
 from app.security.export_auth import require_export_access
+from app.services.orcid_client import get_display_name
+from app.services.publication_enrichment import enrich_publications_from_orcid
 from app.services.sword_generator import SWORDGenerator
 from app.services.zip_generator import ZIPGenerator
 from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
@@ -49,6 +51,22 @@ def _record_downloads(db: Session, current: Researcher, pubs: Iterable[Publicati
     if new_rows:
         db.add_all(new_rows)
         db.commit()
+
+
+def _prepare_researcher_and_publications_for_export(
+    db: Session,
+    researcher: Researcher,
+    pubs: List[Publication],
+) -> None:
+    """Nombre del investigador y detalle ORCID de obras antes de generar SWORD/ZIP."""
+    if not researcher.name:
+        display_name = get_display_name(researcher.orcid_id)
+        if display_name:
+            researcher.name = display_name
+            db.commit()
+            db.refresh(researcher)
+
+    enrich_publications_from_orcid(db, researcher, pubs)
 
 
 def _validate_pub_ids(pub_ids: List[UUID]) -> List[UUID]:
@@ -98,6 +116,10 @@ async def export_multiple_sword(
         raise HTTPException(status_code=404, detail="No publications found")
 
     researcher = db.query(Researcher).filter_by(id=pubs[0].researcher_id).first()
+    if not researcher:
+        raise HTTPException(status_code=404, detail="Researcher not found")
+
+    _prepare_researcher_and_publications_for_export(db, researcher, pubs)
 
     xml_bytes = SWORDGenerator.generate_feed_xml(researcher, pubs)
     if current:
@@ -129,6 +151,8 @@ async def export_researcher_sword(
     if not pubs:
         raise HTTPException(status_code=404, detail="No publications found for this researcher")
 
+    _prepare_researcher_and_publications_for_export(db, researcher, pubs)
+
     xml_bytes = SWORDGenerator.generate_feed_xml(researcher, pubs)
     if current:
         _record_downloads(db, current, pubs)
@@ -156,6 +180,10 @@ async def export_multiple_zip(
         raise HTTPException(status_code=404, detail="No publications found")
 
     researcher = db.query(Researcher).filter_by(id=pubs[0].researcher_id).first()
+    if not researcher:
+        raise HTTPException(status_code=404, detail="Researcher not found")
+
+    _prepare_researcher_and_publications_for_export(db, researcher, pubs)
 
     zip_bytes = ZIPGenerator.generate_zip(researcher, pubs)
     if current:
@@ -186,6 +214,8 @@ async def export_researcher_zip(
     pubs = db.query(Publication).filter_by(researcher_id=researcher.id).all()
     if not pubs:
         raise HTTPException(status_code=404, detail="No publications found for this researcher")
+
+    _prepare_researcher_and_publications_for_export(db, researcher, pubs)
 
     zip_bytes = ZIPGenerator.generate_zip(researcher, pubs)
     if current:

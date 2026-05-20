@@ -20,13 +20,19 @@ from app.schema.researcher import (
 from app.security.jwt import get_optional_current_researcher
 from app.services.normalizer import PublicationNormalizer
 from app.services.orcid_client import get_display_name, get_orcid_client
+from app.services.publication_enrichment import DETAIL_ONLY_FIELDS, apply_publication_data
 from app.utils.orcid_validator import ORCID_PATTERN, is_valid_orcid
 
 
 router = APIRouter(prefix="/researchers", tags=["researchers"])
 
 
-def publication_changed(existing: Publication, data: dict) -> bool:
+def publication_changed(
+    existing: Publication,
+    data: dict,
+    *,
+    include_detail_fields: bool = True,
+) -> bool:
     fields = [
         "title", "subtitle", "type", "journal",
         "pub_year", "pub_month", "pub_day",
@@ -35,6 +41,8 @@ def publication_changed(existing: Publication, data: dict) -> bool:
         "language_code", "country",
         "external_ids", "contributors",
     ]
+    if not include_detail_fields:
+        fields = [f for f in fields if f not in DETAIL_ONLY_FIELDS]
     return any(getattr(existing, f) != data[f] for f in fields)
 
 
@@ -71,6 +79,8 @@ def _upsert_researcher_publications(
     detail_cap = max(0, min(settings.ORCID_WORK_DETAIL_ENRICH_MAX, 200))
     detail_budget = detail_cap if enrich_work_details else 0
     detail_attempts = 0
+    new_detail_cap = max(0, min(settings.ORCID_NEW_SYNC_DETAIL_MAX, 200))
+    new_detail_attempts = 0
 
     for g in groups:
         summaries = g.get("work-summary") or []
@@ -82,28 +92,36 @@ def _upsert_researcher_publications(
         if put_code is None:
             continue
 
+        existing = existing_by_put_code.get(put_code)
         detail = None
-        if detail_budget > 0 and detail_attempts < detail_budget:
+        fetch_detail = (
+            existing is None
+            and new_detail_cap > 0
+            and new_detail_attempts < new_detail_cap
+        )
+        if (
+            not fetch_detail
+            and enrich_work_details
+            and detail_budget > 0
+            and detail_attempts < detail_budget
+        ):
+            fetch_detail = True
+
+        if fetch_detail:
             try:
                 detail = orcid_client.fetch_work_detail(orcid_id, put_code)
             except Exception:
                 detail = None
-            detail_attempts += 1
+            if existing is None:
+                new_detail_attempts += 1
+            else:
+                detail_attempts += 1
 
         data = PublicationNormalizer.normalize(summary, detail)
-
-        existing = existing_by_put_code.get(data["put_code"])
+        preserve_detail = detail is None
 
         if existing:
-            for field in [
-                "title", "subtitle", "type", "journal",
-                "pub_year", "pub_month", "pub_day",
-                "doi", "url", "short_description",
-                "citation_type", "citation_value",
-                "language_code", "country",
-                "external_ids", "contributors",
-            ]:
-                setattr(existing, field, data[field])
+            apply_publication_data(existing, data, preserve_detail_if_missing=preserve_detail)
             existing.last_modified = datetime.utcnow()
             existing.status = None
             publications.append(existing)
@@ -313,6 +331,8 @@ def sync_researcher(
     detail_cap = max(0, min(settings.ORCID_WORK_DETAIL_ENRICH_MAX, 200))
     detail_budget = detail_cap if enrich_work_details else 0
     detail_attempts = 0
+    new_detail_cap = max(0, min(settings.ORCID_NEW_SYNC_DETAIL_MAX, 200))
+    new_detail_attempts = 0
 
     for g in groups:
         summaries = g.get("work-summary") or []
@@ -324,26 +344,50 @@ def sync_researcher(
         if put_code is None:
             continue
 
+        existing = existing_by_put_code.get(put_code)
         detail = None
-        if detail_budget > 0 and detail_attempts < detail_budget:
+        fetch_detail = (
+            existing is None
+            and new_detail_cap > 0
+            and new_detail_attempts < new_detail_cap
+        )
+        if (
+            not fetch_detail
+            and enrich_work_details
+            and detail_budget > 0
+            and detail_attempts < detail_budget
+        ):
+            fetch_detail = True
+
+        if fetch_detail:
             try:
                 detail = orcid_client.fetch_work_detail(orcid_id, put_code)
             except Exception:
                 detail = None
-            detail_attempts += 1
+            if existing is None:
+                new_detail_attempts += 1
+            else:
+                detail_attempts += 1
 
         data = PublicationNormalizer.normalize(summary, detail)
-
-        existing = existing_by_put_code.get(data["put_code"])
+        preserve_detail = detail is None
 
         if existing:
-            if publication_changed(existing, data):
-                for field in data:
-                    setattr(existing, field, data[field])
+            if publication_changed(
+                existing,
+                data,
+                include_detail_fields=not preserve_detail,
+            ):
+                apply_publication_data(
+                    existing, data, preserve_detail_if_missing=preserve_detail
+                )
                 existing.last_modified = datetime.utcnow()
                 existing.status = "updated"
                 updated_count += 1
             else:
+                apply_publication_data(
+                    existing, data, preserve_detail_if_missing=preserve_detail
+                )
                 existing.status = "unchanged"
                 unchanged_count += 1
 
