@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertIcon, ChevronDownIcon, FilterIcon, SearchIcon, SparkleIcon } from "../ui/Icons";
+import { CustomSelect } from "../ui/CustomSelect";
 import { Spinner } from "../ui/Spinner";
 import { Badge } from "../ui/Badge";
 
@@ -314,20 +315,16 @@ export function PublicationsTable({
               >
                 Desde año
               </label>
-              <select
+              <CustomSelect
                 id="year-from"
                 value={yearFrom}
-                onChange={(e) => handleYearFromChange(e.target.value)}
+                onChange={handleYearFromChange}
                 disabled={availableYears.length === 0}
-                className="rounded-md border border-surface-border-strong bg-surface-primary px-2.5 py-1.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Cualquiera</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                options={availableYears.map((y) => ({
+                  value: String(y),
+                  label: String(y),
+                }))}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label
@@ -336,20 +333,16 @@ export function PublicationsTable({
               >
                 Hasta año
               </label>
-              <select
+              <CustomSelect
                 id="year-to"
                 value={yearTo}
-                onChange={(e) => handleYearToChange(e.target.value)}
+                onChange={handleYearToChange}
                 disabled={availableYears.length === 0}
-                className="rounded-md border border-surface-border-strong bg-surface-primary px-2.5 py-1.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Cualquiera</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                options={availableYears.map((y) => ({
+                  value: String(y),
+                  label: String(y),
+                }))}
+              />
             </div>
             {hasYearFilter && (
               <button

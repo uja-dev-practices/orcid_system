@@ -69,7 +69,7 @@ export function SwordProfileSelect({
           <div
             role="listbox"
             aria-labelledby={id}
-            className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[260px] overflow-hidden rounded-xl border border-surface-border-strong bg-surface-primary shadow-lg"
+            className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-80 overflow-hidden rounded-xl border border-surface-border-strong bg-surface-primary shadow-lg"
           >
             {options.map(({ value: optionValue, label, desc }, idx) => (
               <button
@@ -91,7 +91,9 @@ export function SwordProfileSelect({
                   <div className="text-sm font-medium text-ink-primary">
                     {label}
                   </div>
-                  <div className="text-xs text-ink-tertiary">{desc}</div>
+                  <div className="whitespace-nowrap text-xs text-ink-tertiary">
+                    {desc}
+                  </div>
                 </div>
               </button>
             ))}
