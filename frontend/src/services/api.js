@@ -129,7 +129,19 @@ async function request(path, { method = "GET", body, signal, headers } = {}) {
 
     const detail =
       payload?.detail ?? payload?.message ?? response.statusText ?? "Error";
-    throw new ApiError(typeof detail === "string" ? detail : "Error de API", {
+    const detailText = typeof detail === "string" ? detail : "Error de API";
+
+    // Sesión caducada: no bloquear rutas públicas; el backend ya ignora Bearer inválido
+    // en búsqueda, pero otras rutas pueden seguir devolviendo 401.
+    if (
+      response.status === 401 &&
+      /invalid|expired|token/i.test(detailText) &&
+      localStorage.getItem("orcid_auth_token")
+    ) {
+      localStorage.removeItem("orcid_auth_token");
+    }
+
+    throw new ApiError(detailText, {
       status: response.status,
       payload,
     });

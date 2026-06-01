@@ -16,7 +16,10 @@ import {
   syncResearcher,
 } from "../services/api";
 import { isValidOrcid } from "../utils/orcid";
-import { DEFAULT_EXPORT_PROFILE, swordXmlFilename } from "../utils/exportProfiles";
+import {
+  DEFAULT_EXPORT_DESTINATION,
+  swordXmlFilename,
+} from "../utils/exportProfiles";
 import { useAuth } from "../contexts/AuthContext";
 
 const SUCCESS_FLASH_MS = 3000;
@@ -50,7 +53,9 @@ export function DashboardPage() {
 
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | success
   const [exportingFormat, setExportingFormat] = useState(null);
-  const [swordProfile, setSwordProfile] = useState(DEFAULT_EXPORT_PROFILE);
+  const [exportDestination, setExportDestination] = useState(
+    DEFAULT_EXPORT_DESTINATION,
+  );
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
@@ -140,7 +145,7 @@ export function DashboardPage() {
     }
   }
 
-  async function handleExport(format, profile = DEFAULT_EXPORT_PROFILE) {
+  async function handleExport(format, profile = DEFAULT_EXPORT_DESTINATION) {
     setExportingFormat(format);
     try {
       let ids;
@@ -226,8 +231,8 @@ export function DashboardPage() {
                     selectedCount={selectedIds.size}
                     isAuthenticated={isAuthenticated}
                     newPublicationsCount={newPublicationIds.length}
-                    swordProfile={swordProfile}
-                    onSwordProfileChange={setSwordProfile}
+                    exportDestination={exportDestination}
+                    onExportDestinationChange={setExportDestination}
                   />
                 </>
               }

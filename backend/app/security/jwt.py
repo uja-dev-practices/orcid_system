@@ -129,10 +129,30 @@ def get_optional_current_researcher(
     db: Session = Depends(get_db),
 ) -> Researcher | None:
     """
-    Devuelve el investigador autenticado si hay Bearer válido.
-    Si no hay Bearer, devuelve None.
-    Si hay Bearer inválido, lanza 401 (no se acepta como anónimo).
+    Devuelve el investigador autenticado si hay Bearer válido y la sesión sigue activa.
+
+    Sin Bearer, token inválido/expirado o investigador no autenticado → None.
+    Las rutas públicas (p. ej. búsqueda) deben seguir funcionando aunque el navegador
+    conserve un JWT caducado en localStorage.
     """
     if not creds or not creds.credentials:
         return None
-    return get_current_researcher(request=request, creds=creds, db=db)
+
+    try:
+        payload = _decode_token(creds.credentials)
+    except HTTPException:
+        return None
+
+    if payload.get("typ") != "access":
+        return None
+
+    orcid_id = payload.get("sub")
+    if not isinstance(orcid_id, str) or not is_valid_orcid(orcid_id):
+        return None
+
+    researcher = db.query(Researcher).filter(Researcher.orcid_id == orcid_id).first()
+    if not researcher or not researcher.authenticated:
+        return None
+
+    request.state.researcher = researcher
+    return researcher
