@@ -71,11 +71,9 @@ function TriStateCheckbox({ checked, indeterminate = false, onChange, ariaLabel 
  * retries and toasts can be handled in one place.
  *
  * Selection semantics:
- *   - The master checkbox toggles the WHOLE currently-filtered set (not
- *     just the visible page). This matches the user mental model of
- *     "filtrar por 2024 → marcar todas de 2024".
- *   - Selection survives filter changes: the stored IDs remain even if
- *     those rows are no longer visible.
+ *   - The master checkbox toggles only the rows on the current page.
+ *   - Selection is stored by ID in the parent and persists across pages,
+ *     filters and sorts so the user can select page by page.
  */
 export function PublicationsTable({
   publications,
@@ -152,20 +150,19 @@ export function PublicationsTable({
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
-  const selectionStats = useMemo(() => {
-    if (filtered.length === 0) {
-      return { allChecked: false, anyChecked: false, selectedInFiltered: 0 };
+  const pageSelectionStats = useMemo(() => {
+    if (pageRows.length === 0) {
+      return { allChecked: false, anyChecked: false };
     }
     let count = 0;
-    for (const pub of filtered) {
+    for (const pub of pageRows) {
       if (selectedIds.has(pub.id)) count += 1;
     }
     return {
-      allChecked: count === filtered.length,
+      allChecked: count === pageRows.length,
       anyChecked: count > 0,
-      selectedInFiltered: count,
     };
-  }, [filtered, selectedIds]);
+  }, [pageRows, selectedIds]);
 
   function toggleSort(key) {
     if (sortKey === key) {
@@ -189,12 +186,12 @@ export function PublicationsTable({
     emit(next);
   }
 
-  function toggleAllFiltered() {
+  function toggleCurrentPage() {
     const next = new Set(selectedIds);
-    if (selectionStats.allChecked) {
-      for (const pub of filtered) next.delete(pub.id);
+    if (pageSelectionStats.allChecked) {
+      for (const pub of pageRows) next.delete(pub.id);
     } else {
-      for (const pub of filtered) next.add(pub.id);
+      for (const pub of pageRows) next.add(pub.id);
     }
     emit(next);
   }
@@ -378,10 +375,10 @@ export function PublicationsTable({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <TriStateCheckbox
-                    checked={selectionStats.allChecked}
-                    indeterminate={selectionStats.anyChecked}
-                    onChange={toggleAllFiltered}
-                    ariaLabel="Seleccionar todas las publicaciones del filtro actual"
+                    checked={pageSelectionStats.allChecked}
+                    indeterminate={pageSelectionStats.anyChecked}
+                    onChange={toggleCurrentPage}
+                    ariaLabel="Seleccionar todas las publicaciones de esta página"
                   />
                 </th>
                 {COLUMNS.map((col) => (
