@@ -258,20 +258,21 @@ export function PublicationsTable({
               )}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={() => setFiltersOpen((o) => !o)}
               aria-expanded={filtersOpen}
               aria-controls="pubs-advanced-filters"
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors ${
+              className={`order-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors sm:order-1 sm:w-auto sm:justify-start ${
                 filtersOpen || hasYearFilter
                   ? "border-brand-accent/50 bg-brand-accent/10 text-brand-accent"
                   : "border-surface-border-strong bg-surface-secondary text-ink-secondary hover:bg-surface-primary"
               }`}
             >
               <FilterIcon />
-              Filtros
+              <span className="sm:hidden">Filtros</span>
+              <span className="hidden sm:inline">Filtros avanzados</span>
               {hasYearFilter && (
                 <span
                   className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-brand-accent"
@@ -282,7 +283,7 @@ export function PublicationsTable({
                 className={`transition-transform ${filtersOpen ? "rotate-180" : ""}`}
               />
             </button>
-            <div className="relative">
+            <div className="relative order-1 w-full sm:order-2 sm:w-auto">
               <input
                 type="text"
                 placeholder="Filtrar publicaciones..."
@@ -291,7 +292,7 @@ export function PublicationsTable({
                   setFilter(e.target.value);
                   setPage(1);
                 }}
-                className="w-[220px] rounded-lg border border-surface-border-strong bg-surface-secondary py-2 pl-9 pr-3.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent"
+                className="w-full rounded-lg border border-surface-border-strong bg-surface-secondary py-2 pl-9 pr-3.5 text-[13px] text-ink-primary outline-none focus:border-brand-accent sm:w-[220px]"
               />
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-tertiary/70">
                 <SearchIcon />
@@ -303,49 +304,80 @@ export function PublicationsTable({
         {filtersOpen && (
           <div
             id="pubs-advanced-filters"
-            className="flex flex-wrap items-end gap-4 border-t border-surface-border/60 bg-surface-secondary/40 px-5 py-3"
+            className="border-t border-surface-border/60 bg-surface-secondary/40 px-5 py-3"
           >
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="year-from"
-                className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
-              >
-                Desde año
-              </label>
-              <CustomSelect
-                id="year-from"
-                value={yearFrom}
-                onChange={handleYearFromChange}
-                disabled={availableYears.length === 0}
-                options={availableYears.map((y) => ({
-                  value: String(y),
-                  label: String(y),
-                }))}
-              />
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-ink-secondary">
+                Filtrar por año de publicación
+              </p>
+              {yearFilterSummary && (
+                <span className="rounded-full border border-brand-accent/30 bg-brand-accent/10 px-2 py-0.5 text-[11px] font-medium text-brand-accent">
+                  {yearFilterSummary}
+                </span>
+              )}
             </div>
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="year-to"
-                className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
-              >
-                Hasta año
-              </label>
-              <CustomSelect
-                id="year-to"
-                value={yearTo}
-                onChange={handleYearToChange}
-                disabled={availableYears.length === 0}
-                options={availableYears.map((y) => ({
-                  value: String(y),
-                  label: String(y),
-                }))}
-              />
+
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_auto_1fr_auto]">
+              <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+                <label
+                  htmlFor="year-from"
+                  className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
+                >
+                  Desde
+                </label>
+                <CustomSelect
+                  id="year-from"
+                  value={yearFrom}
+                  onChange={handleYearFromChange}
+                  disabled={availableYears.length === 0}
+                  options={availableYears.map((y) => ({
+                    value: String(y),
+                    label: String(y),
+                  }))}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="hidden pb-2 text-center text-sm text-ink-tertiary sm:block">
+                —
+              </div>
+
+              <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+                <label
+                  htmlFor="year-to"
+                  className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
+                >
+                  Hasta
+                </label>
+                <CustomSelect
+                  id="year-to"
+                  value={yearTo}
+                  onChange={handleYearToChange}
+                  disabled={availableYears.length === 0}
+                  options={availableYears.map((y) => ({
+                    value: String(y),
+                    label: String(y),
+                  }))}
+                  className="w-full"
+                />
+              </div>
+
+              {hasYearFilter && (
+                <button
+                  type="button"
+                  onClick={clearYearFilter}
+                  className="rounded-lg border border-surface-border-strong bg-surface-primary px-3 py-2 text-[13px] font-medium text-ink-secondary transition-colors hover:bg-surface-secondary"
+                >
+                  Limpiar
+                </button>
+              )}
             </div>
+
             {hasYearFilter && (
               <button
                 type="button"
                 onClick={clearYearFilter}
-                className="mb-[2px] rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-tertiary transition-colors hover:bg-surface-primary hover:text-ink-primary"
+                className="sr-only"
               >
                 Limpiar rango
               </button>
@@ -366,123 +398,217 @@ export function PublicationsTable({
         ) : loading ? (
           <LoadingState />
         ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-surface-secondary">
-                <th
-                  scope="col"
-                  className="w-10 border-b border-surface-border/60 px-4 py-2.5 text-left"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <TriStateCheckbox
-                    checked={pageSelectionStats.allChecked}
-                    indeterminate={pageSelectionStats.anyChecked}
-                    onChange={toggleCurrentPage}
-                    ariaLabel="Seleccionar todas las publicaciones de esta página"
-                  />
-                </th>
-                {COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    onClick={() => toggleSort(col.key)}
-                    className={`select-none border-b border-surface-border/60 px-4 py-2.5 text-left text-xs font-medium tracking-wide text-ink-secondary${col.thClass ? ` ${col.thClass}` : ""}`}
-                  >
-                    <span className="flex cursor-pointer items-center">
-                      {col.label.toUpperCase()}
-                      <SortIcon
-                        active={sortKey === col.key}
-                        direction={sortDir}
-                      />
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <div className="md:hidden">
               {filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={COLUMNS.length + 1}
-                    className="p-10 text-center text-sm text-ink-tertiary"
-                  >
-                    No se encontraron publicaciones con los filtros aplicados.
-                  </td>
-                </tr>
+                <p className="p-8 text-center text-sm text-ink-tertiary">
+                  No se encontraron publicaciones con los filtros aplicados.
+                </p>
               ) : (
-                pageRows.map((pub, i) => {
-                  const isSelected = selectedIds.has(pub.id);
-                  return (
-                    <tr
-                      key={pub.id}
-                      className={`transition-colors ${
-                        isSelected
-                          ? "bg-tag-article-bg/70 hover:bg-tag-article-bg"
-                          : "hover:bg-surface-secondary/70"
-                      } ${
-                        i < pageRows.length - 1
-                          ? "border-b border-surface-border/60"
-                          : ""
-                      }`}
+                <>
+                  <div className="border-b border-surface-border/60 bg-surface-secondary px-4 py-2.5">
+                    <TriStateCheckbox
+                      checked={pageSelectionStats.allChecked}
+                      indeterminate={pageSelectionStats.anyChecked}
+                      onChange={toggleCurrentPage}
+                      ariaLabel="Seleccionar todas las publicaciones de esta página"
+                    />
+                  </div>
+                  <div>
+                    {pageRows.map((pub, i) => {
+                      const isSelected = selectedIds.has(pub.id);
+                      return (
+                        <article
+                          key={pub.id}
+                          className={`px-4 py-3.5 transition-colors ${
+                            isSelected
+                              ? "bg-tag-article-bg/70 hover:bg-tag-article-bg"
+                              : "hover:bg-surface-secondary/70"
+                          } ${
+                            i < pageRows.length - 1
+                              ? "border-b border-surface-border/60"
+                              : ""
+                          }`}
+                        >
+                          <div className="mb-2 flex items-start gap-2.5">
+                            <TriStateCheckbox
+                              checked={isSelected}
+                              onChange={() => toggleRow(pub.id)}
+                              ariaLabel={`Seleccionar publicación ${pub.title}`}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-start gap-1.5">
+                                {isAuthenticated && pub.downloaded_by_me === false && (
+                                  <span
+                                    title="No descargada aún por ti"
+                                    className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-accent"
+                                  >
+                                    <SparkleIcon size={9} />
+                                    Nuevo
+                                  </span>
+                                )}
+                                <p className="text-[14px] font-medium leading-relaxed text-ink-primary">
+                                  {pub.title}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5 pl-6.5 text-[12px] text-ink-secondary">
+                            <p>
+                              <span className="font-medium text-ink-primary">Revista:</span>{" "}
+                              {pub.journal || "—"}
+                            </p>
+                            <p>
+                              <span className="font-medium text-ink-primary">Año:</span>{" "}
+                              {pub.publication_year ?? "—"}
+                            </p>
+                            <p>
+                              <span className="font-medium text-ink-primary">DOI:</span>{" "}
+                              {pub.doi ? (
+                                <a
+                                  href={`https://doi.org/${pub.doi}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="break-all font-mono text-[11px] text-brand-accent hover:underline"
+                                >
+                                  {pub.doi}
+                                </a>
+                              ) : (
+                                <span className="font-mono text-[11px] text-ink-tertiary">
+                                  —
+                                </span>
+                              )}
+                            </p>
+                            <div>
+                              <Badge type={pub.type} />
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <table className="hidden w-full border-collapse md:table">
+              <thead>
+                <tr className="bg-surface-secondary">
+                  <th
+                    scope="col"
+                    className="w-10 border-b border-surface-border/60 px-4 py-2.5 text-left"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <TriStateCheckbox
+                      checked={pageSelectionStats.allChecked}
+                      indeterminate={pageSelectionStats.anyChecked}
+                      onChange={toggleCurrentPage}
+                      ariaLabel="Seleccionar todas las publicaciones de esta página"
+                    />
+                  </th>
+                  {COLUMNS.map((col) => (
+                    <th
+                      key={col.key}
+                      onClick={() => toggleSort(col.key)}
+                      className={`select-none border-b border-surface-border/60 px-4 py-2.5 text-left text-xs font-medium tracking-wide text-ink-secondary${col.thClass ? ` ${col.thClass}` : ""}`}
                     >
-                      <td
-                        className="w-10 cursor-pointer px-4 py-3.5"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleRow(pub.id);
-                        }}
-                      >
-                        <TriStateCheckbox
-                          checked={isSelected}
-                          onChange={() => toggleRow(pub.id)}
-                          ariaLabel={`Seleccionar publicación ${pub.title}`}
+                      <span className="flex cursor-pointer items-center">
+                        {col.label.toUpperCase()}
+                        <SortIcon
+                          active={sortKey === col.key}
+                          direction={sortDir}
                         />
-                      </td>
-                      <td className="max-w-[280px] px-4 py-3.5 text-[13px] font-medium leading-relaxed text-ink-primary">
-                        <span className="flex flex-wrap items-start gap-1.5">
-                          {isAuthenticated && pub.downloaded_by_me === false && (
-                            <span
-                              title="No descargada aún por ti"
-                              className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-accent"
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={COLUMNS.length + 1}
+                      className="p-10 text-center text-sm text-ink-tertiary"
+                    >
+                      No se encontraron publicaciones con los filtros aplicados.
+                    </td>
+                  </tr>
+                ) : (
+                  pageRows.map((pub, i) => {
+                    const isSelected = selectedIds.has(pub.id);
+                    return (
+                      <tr
+                        key={pub.id}
+                        className={`transition-colors ${
+                          isSelected
+                            ? "bg-tag-article-bg/70 hover:bg-tag-article-bg"
+                            : "hover:bg-surface-secondary/70"
+                        } ${
+                          i < pageRows.length - 1
+                            ? "border-b border-surface-border/60"
+                            : ""
+                        }`}
+                      >
+                        <td
+                          className="w-10 cursor-pointer px-4 py-3.5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRow(pub.id);
+                          }}
+                        >
+                          <TriStateCheckbox
+                            checked={isSelected}
+                            onChange={() => toggleRow(pub.id)}
+                            ariaLabel={`Seleccionar publicación ${pub.title}`}
+                          />
+                        </td>
+                        <td className="max-w-[280px] px-4 py-3.5 text-[13px] font-medium leading-relaxed text-ink-primary">
+                          <span className="flex flex-wrap items-start gap-1.5">
+                            {isAuthenticated && pub.downloaded_by_me === false && (
+                              <span
+                                title="No descargada aún por ti"
+                                className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-accent"
+                              >
+                                <SparkleIcon size={9} />
+                                Nuevo
+                              </span>
+                            )}
+                            {pub.title}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-[13px] text-ink-secondary">
+                          {pub.journal || "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-ink-primary">
+                          {pub.publication_year ?? "—"}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {pub.doi ? (
+                            <a
+                              href={`https://doi.org/${pub.doi}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="whitespace-nowrap font-mono text-xs text-brand-accent hover:underline"
                             >
-                              <SparkleIcon size={9} />
-                              Nuevo
+                              {pub.doi}
+                            </a>
+                          ) : (
+                            <span className="whitespace-nowrap font-mono text-xs text-ink-tertiary">
+                              —
                             </span>
                           )}
-                          {pub.title}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-[13px] text-ink-secondary">
-                        {pub.journal || "—"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-ink-primary">
-                        {pub.publication_year ?? "—"}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {pub.doi ? (
-                          <a
-                            href={`https://doi.org/${pub.doi}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="whitespace-nowrap font-mono text-xs text-brand-accent hover:underline"
-                          >
-                            {pub.doi}
-                          </a>
-                        ) : (
-                          <span className="whitespace-nowrap font-mono text-xs text-ink-tertiary">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge type={pub.type} />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <Badge type={pub.type} />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 

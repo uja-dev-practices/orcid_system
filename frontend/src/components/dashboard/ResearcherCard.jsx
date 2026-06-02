@@ -44,7 +44,7 @@ export function ResearcherCard({ researcher, actions = null }) {
       </div>
 
       {actions && (
-        <div className="ml-auto flex shrink-0 flex-col items-end gap-2.5">
+        <div className="flex w-full flex-col items-stretch gap-2.5 md:ml-auto md:w-auto md:shrink-0 md:items-end">
           {actions}
         </div>
       )}

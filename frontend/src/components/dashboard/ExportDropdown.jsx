@@ -49,19 +49,20 @@ export function ExportDropdown({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+    <div className="mx-auto flex w-full max-w-[440px] flex-col items-stretch gap-2 sm:mx-0 sm:w-auto sm:max-w-none sm:flex-row sm:items-center sm:justify-end">
       <SwordProfileSelect
         id="dashboard-export-destination"
         value={exportDestination}
         onChange={onExportDestinationChange}
         includeZip
+        className="w-full"
       />
 
       <button
         type="button"
         onClick={handleDownload}
         disabled={isBusy || nothingToDownload}
-        className="inline-flex items-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-[18px] py-2.5 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-[18px] py-2.5 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
       >
         {isBusy ? (
           <Spinner size={15} />
