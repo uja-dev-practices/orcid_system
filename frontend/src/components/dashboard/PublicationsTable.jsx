@@ -258,13 +258,13 @@ export function PublicationsTable({
               )}
             </p>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={() => setFiltersOpen((o) => !o)}
               aria-expanded={filtersOpen}
               aria-controls="pubs-advanced-filters"
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors ${
+              className={`order-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors sm:order-1 sm:w-auto sm:justify-start ${
                 filtersOpen || hasYearFilter
                   ? "border-brand-accent/50 bg-brand-accent/10 text-brand-accent"
                   : "border-surface-border-strong bg-surface-secondary text-ink-secondary hover:bg-surface-primary"
@@ -282,7 +282,7 @@ export function PublicationsTable({
                 className={`transition-transform ${filtersOpen ? "rotate-180" : ""}`}
               />
             </button>
-            <div className="relative w-full sm:w-auto">
+            <div className="relative order-1 w-full sm:order-2 sm:w-auto">
               <input
                 type="text"
                 placeholder="Filtrar publicaciones..."
@@ -305,7 +305,7 @@ export function PublicationsTable({
             id="pubs-advanced-filters"
             className="flex flex-wrap items-end gap-4 border-t border-surface-border/60 bg-surface-secondary/40 px-5 py-3"
           >
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-[140px] flex-1 flex-col gap-1">
               <label
                 htmlFor="year-from"
                 className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
@@ -321,9 +321,10 @@ export function PublicationsTable({
                   value: String(y),
                   label: String(y),
                 }))}
+                className="w-full"
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-[140px] flex-1 flex-col gap-1">
               <label
                 htmlFor="year-to"
                 className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
@@ -339,6 +340,7 @@ export function PublicationsTable({
                   value: String(y),
                   label: String(y),
                 }))}
+                className="w-full"
               />
             </div>
             {hasYearFilter && (
