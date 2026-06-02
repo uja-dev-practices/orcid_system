@@ -224,7 +224,11 @@ export function DashboardPage() {
               researcher={researcher}
               actions={
                 <>
-                  <SyncButton onClick={handleSync} status={syncStatus} />
+                  <SyncButton
+                    onClick={handleSync}
+                    status={syncStatus}
+                    className="w-full sm:w-auto"
+                  />
                   <ExportDropdown
                     onExport={handleExport}
                     exportingFormat={exportingFormat}

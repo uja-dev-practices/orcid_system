@@ -5,7 +5,7 @@ import { Spinner } from "../ui/Spinner";
  * Primary action button on the dashboard. Swaps icon + colour scheme
  * depending on the sync lifecycle (idle → loading → success flash).
  */
-export function SyncButton({ onClick, status = "idle" }) {
+export function SyncButton({ onClick, status = "idle", className = "" }) {
   const isLoading = status === "loading";
   const isSuccess = status === "success";
 
@@ -20,7 +20,7 @@ export function SyncButton({ onClick, status = "idle" }) {
       type="button"
       onClick={onClick}
       disabled={isLoading}
-      className={`inline-flex items-center gap-2 rounded-lg px-[18px] py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${palette}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-[18px] py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${palette} ${className}`.trim()}
     >
       {isLoading ? (
         <Spinner size={15} />

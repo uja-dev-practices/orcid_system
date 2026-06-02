@@ -14,8 +14,13 @@ import {
   UsersIcon,
 } from "../components/ui/Icons";
 import { downloadExport, searchResearchersBulk } from "../services/api";
-import { DEFAULT_EXPORT_PROFILE, swordXmlFilename } from "../utils/exportProfiles";
-import { SwordProfileSelect } from "../components/dashboard/SwordProfileSelect";
+import {
+  DEFAULT_EXPORT_DESTINATION,
+  DEFAULT_EXPORT_PROFILE,
+  EXPORT_ZIP_DESTINATION,
+  swordXmlFilename,
+} from "../utils/exportProfiles";
+import { ExportDropdown } from "../components/dashboard/ExportDropdown";
 import { useAuth } from "../contexts/AuthContext";
 
 /**
@@ -36,6 +41,9 @@ export function GroupResultsPage() {
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [globalExporting, setGlobalExporting] = useState(null); // format | null
+  const [globalExportDestination, setGlobalExportDestination] = useState(
+    DEFAULT_EXPORT_DESTINATION,
+  );
   const [swordProfile, setSwordProfile] = useState(DEFAULT_EXPORT_PROFILE);
 
   // Track per-researcher export state (format | null)
@@ -101,6 +109,14 @@ export function GroupResultsPage() {
     () => results.flatMap((r) => (r.publications ?? []).map((p) => p.id)),
     [results],
   );
+
+  function handleGlobalExportDestinationChange(nextDestination) {
+    setGlobalExportDestination(nextDestination);
+    // Keep last XML profile for card-level exports.
+    if (nextDestination !== EXPORT_ZIP_DESTINATION) {
+      setSwordProfile(nextDestination);
+    }
+  }
 
   async function handleGlobalExport(format, profile = DEFAULT_EXPORT_PROFILE) {
     const ids = isAuthenticated ? allNewIds : allIds;
@@ -193,16 +209,6 @@ export function GroupResultsPage() {
     }
   }
 
-  const globalLabel = isAuthenticated
-    ? allNewIds.length > 0
-      ? `Descargar lo nuevo de todos (${allNewIds.length})`
-      : "Todo descargado"
-    : `Descargar todo (${allIds.length})`;
-
-  const globalDisabled =
-    Boolean(globalExporting) ||
-    (isAuthenticated ? allNewIds.length === 0 : allIds.length === 0);
-
   return (
     <div className="flex min-h-screen flex-col bg-surface-tertiary">
       <AppHeader variant="group" />
@@ -233,33 +239,15 @@ export function GroupResultsPage() {
 
             {/* Global export buttons */}
             {!loading && results.length > 0 && (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <SwordProfileSelect
-                  id="group-sword-profile"
-                  value={swordProfile}
-                  onChange={setSwordProfile}
-                />
-                {["xml", "zip"].map((fmt) => (
-                  <button
-                    key={fmt}
-                    type="button"
-                    onClick={() => handleGlobalExport(fmt, swordProfile)}
-                    disabled={globalDisabled}
-                    className="inline-flex items-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-4 py-2 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {globalExporting === fmt ? (
-                      <Spinner size={14} />
-                    ) : isAuthenticated && allNewIds.length > 0 ? (
-                      <SparkleIcon size={13} className="text-brand-accent" />
-                    ) : (
-                      <DownloadIcon size={14} />
-                    )}
-                    {globalExporting === fmt
-                      ? `Exportando ${fmt.toUpperCase()}...`
-                      : `${fmt.toUpperCase()} · ${globalLabel}`}
-                  </button>
-                ))}
-              </div>
+              <ExportDropdown
+                onExport={handleGlobalExport}
+                exportingFormat={globalExporting}
+                selectedCount={0}
+                isAuthenticated={isAuthenticated}
+                newPublicationsCount={allNewIds.length}
+                exportDestination={globalExportDestination}
+                onExportDestinationChange={handleGlobalExportDestinationChange}
+              />
             )}
           </div>
 
