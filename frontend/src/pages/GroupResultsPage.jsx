@@ -214,6 +214,14 @@ export function GroupResultsPage() {
       <AppHeader variant="group" />
       <main className="flex-1">
         <div className="mx-auto w-full max-w-7xl px-4 py-7">
+          <Link
+            to="/"
+            className="mb-5 inline-flex items-center gap-1.5 text-sm text-ink-tertiary transition-colors hover:text-ink-primary"
+          >
+            <ArrowLeftIcon size={14} />
+            Volver al inicio
+          </Link>
+
           {/* Page header */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -282,7 +290,6 @@ export function GroupResultsPage() {
                       swordProfile,
                     )
                   }
-                  swordProfile={swordProfile}
                 />
               ))}
             </div>
@@ -343,7 +350,6 @@ function ResearcherResultCard({
   isAuthenticated,
   exporting,
   onExport,
-  swordProfile,
 }) {
   const researcher = bundle.researcher ?? {};
   const publications = bundle.publications ?? [];

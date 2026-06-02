@@ -221,7 +221,7 @@ export function LandingPage() {
               Tus publicaciones, listas para depositar.
             </h1>
             <p className="mx-auto max-w-xl text-[16px] leading-relaxed text-ink-secondary">
-              Conecta tu ORCID y descárgalas en XML cuando quieras.
+              Conecta tu ORCID y descárgalas cuando quieras.
             </p>
           </div>
 

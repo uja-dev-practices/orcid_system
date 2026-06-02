@@ -271,7 +271,8 @@ export function PublicationsTable({
               }`}
             >
               <FilterIcon />
-              Filtros
+              <span className="sm:hidden">Filtros</span>
+              <span className="hidden sm:inline">Filtros avanzados</span>
               {hasYearFilter && (
                 <span
                   className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-brand-accent"
@@ -303,51 +304,80 @@ export function PublicationsTable({
         {filtersOpen && (
           <div
             id="pubs-advanced-filters"
-            className="flex flex-wrap items-end gap-4 border-t border-surface-border/60 bg-surface-secondary/40 px-5 py-3"
+            className="border-t border-surface-border/60 bg-surface-secondary/40 px-5 py-3"
           >
-            <div className="flex min-w-[140px] flex-1 flex-col gap-1">
-              <label
-                htmlFor="year-from"
-                className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
-              >
-                Desde año
-              </label>
-              <CustomSelect
-                id="year-from"
-                value={yearFrom}
-                onChange={handleYearFromChange}
-                disabled={availableYears.length === 0}
-                options={availableYears.map((y) => ({
-                  value: String(y),
-                  label: String(y),
-                }))}
-                className="w-full"
-              />
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-ink-secondary">
+                Filtrar por año de publicación
+              </p>
+              {yearFilterSummary && (
+                <span className="rounded-full border border-brand-accent/30 bg-brand-accent/10 px-2 py-0.5 text-[11px] font-medium text-brand-accent">
+                  {yearFilterSummary}
+                </span>
+              )}
             </div>
-            <div className="flex min-w-[140px] flex-1 flex-col gap-1">
-              <label
-                htmlFor="year-to"
-                className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
-              >
-                Hasta año
-              </label>
-              <CustomSelect
-                id="year-to"
-                value={yearTo}
-                onChange={handleYearToChange}
-                disabled={availableYears.length === 0}
-                options={availableYears.map((y) => ({
-                  value: String(y),
-                  label: String(y),
-                }))}
-                className="w-full"
-              />
+
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_auto_1fr_auto]">
+              <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+                <label
+                  htmlFor="year-from"
+                  className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
+                >
+                  Desde
+                </label>
+                <CustomSelect
+                  id="year-from"
+                  value={yearFrom}
+                  onChange={handleYearFromChange}
+                  disabled={availableYears.length === 0}
+                  options={availableYears.map((y) => ({
+                    value: String(y),
+                    label: String(y),
+                  }))}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="hidden pb-2 text-center text-sm text-ink-tertiary sm:block">
+                —
+              </div>
+
+              <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+                <label
+                  htmlFor="year-to"
+                  className="text-[11px] font-medium uppercase tracking-wide text-ink-tertiary"
+                >
+                  Hasta
+                </label>
+                <CustomSelect
+                  id="year-to"
+                  value={yearTo}
+                  onChange={handleYearToChange}
+                  disabled={availableYears.length === 0}
+                  options={availableYears.map((y) => ({
+                    value: String(y),
+                    label: String(y),
+                  }))}
+                  className="w-full"
+                />
+              </div>
+
+              {hasYearFilter && (
+                <button
+                  type="button"
+                  onClick={clearYearFilter}
+                  className="rounded-lg border border-surface-border-strong bg-surface-primary px-3 py-2 text-[13px] font-medium text-ink-secondary transition-colors hover:bg-surface-secondary"
+                >
+                  Limpiar
+                </button>
+              )}
             </div>
+
             {hasYearFilter && (
               <button
                 type="button"
                 onClick={clearYearFilter}
-                className="mb-[2px] rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-tertiary transition-colors hover:bg-surface-primary hover:text-ink-primary"
+                className="sr-only"
               >
                 Limpiar rango
               </button>

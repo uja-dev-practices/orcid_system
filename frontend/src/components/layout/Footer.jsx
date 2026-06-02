@@ -6,11 +6,11 @@ export default function Footer() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
   
           {/* Main row */}
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-7 lg:flex-row lg:items-start lg:justify-between">
   
             {/* Brand */}
-            <div className="flex flex-col gap-2 lg:max-w-xs">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-2 text-center lg:max-w-xs lg:text-left">
+              <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-start">
                 <span className="text-base font-extrabold tracking-tight text-ink-primary">
                   ORCID<span className="text-orcid-green">2</span>SWORD
                 </span>
@@ -19,16 +19,16 @@ export default function Footer() {
                 </span>
               </div>
               <p className="text-sm leading-relaxed text-ink-secondary">
-                Sincronización de publicaciones ORCID al repositorio institucional.
+              Extracción y preparación de publicaciones ORCID para repositorios académicos.
               </p>
             </div>
   
             {/* Compatible con */}
             <div className="flex flex-col gap-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-ink-tertiary">
+              <span className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-ink-tertiary lg:text-left">
                 Compatible con
               </span>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap justify-center gap-1.5 lg:justify-start">
                 {technologies.map((tech) => (
                   <span
                     key={tech}
@@ -41,13 +41,13 @@ export default function Footer() {
             </div>
   
             {/* Institutional links */}
-            <div className="flex flex-row gap-6 sm:gap-8">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
   
               {/* Universidad de Jaén */}
               <a
                 href="https://www.ujaen.es/"
                 target="_blank" rel="noopener noreferrer"
-                className="group flex items-center gap-2.5"
+                className="group flex items-center justify-center gap-2.5 rounded-lg border border-surface-border bg-surface-secondary/30 px-3 py-2 transition-colors hover:bg-surface-secondary/60"
                 title="Ir a la web oficial de la Universidad de Jaén"
               >
                 <div className="flex h-8 flex-col justify-center border-r-2 border-surface-border-strong pr-2.5 text-right transition-colors group-hover:border-brand-accent">
@@ -65,7 +65,7 @@ export default function Footer() {
               <a
                 href="https://github.com/uja-dev-practices/orcid_system"
                 target="_blank" rel="noopener noreferrer"
-                className="group flex items-center gap-2.5"
+                className="group flex items-center justify-center gap-2.5 rounded-lg border border-surface-border bg-surface-secondary/30 px-3 py-2 transition-colors hover:bg-surface-secondary/60"
                 title="Ver repositorio oficial"
               >
                 <div className="flex h-8 flex-col justify-center border-r-2 border-surface-border-strong pr-2.5 text-right transition-colors group-hover:border-brand-primary">
