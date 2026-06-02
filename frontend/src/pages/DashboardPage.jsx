@@ -23,6 +23,9 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 
 const SUCCESS_FLASH_MS = 3000;
+/** Minimum gap between sync requests (protects backend + avoids toast spam). */
+const SYNC_COOLDOWN_MS = 5000;
+const SYNC_TOAST_ID = "researcher-sync";
 
 /**
  * Researcher detail page. Owns:
@@ -52,6 +55,10 @@ export function DashboardPage() {
   const [pubsError, setPubsError] = useState(null);
 
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | success
+  const [syncCooldownActive, setSyncCooldownActive] = useState(false);
+  const syncInFlightRef = useRef(false);
+  const syncCooldownUntilRef = useRef(0);
+  const syncCooldownTimerRef = useRef(null);
   const [exportingFormat, setExportingFormat] = useState(null);
   const [exportDestination, setExportDestination] = useState(
     DEFAULT_EXPORT_DESTINATION,
@@ -110,12 +117,44 @@ export function DashboardPage() {
     return () => ctrl.abort();
   }, [orcid, loadBundle]);
 
+  useEffect(() => {
+    return () => {
+      if (syncCooldownTimerRef.current) {
+        clearTimeout(syncCooldownTimerRef.current);
+      }
+    };
+  }, []);
+
+  const syncDisabled = syncStatus !== "idle" || syncCooldownActive;
+
+  function startSyncCooldown() {
+    syncCooldownUntilRef.current = Date.now() + SYNC_COOLDOWN_MS;
+    setSyncCooldownActive(true);
+    if (syncCooldownTimerRef.current) {
+      clearTimeout(syncCooldownTimerRef.current);
+    }
+    syncCooldownTimerRef.current = setTimeout(() => {
+      setSyncCooldownActive(false);
+      syncCooldownTimerRef.current = null;
+    }, SYNC_COOLDOWN_MS);
+  }
+
   if (!isValidOrcid(orcid)) {
     return <Navigate to="/" replace />;
   }
 
   async function handleSync() {
+    if (
+      syncInFlightRef.current ||
+      syncStatus !== "idle" ||
+      Date.now() < syncCooldownUntilRef.current
+    ) {
+      return;
+    }
+
+    syncInFlightRef.current = true;
     setSyncStatus("loading");
+
     try {
       const bundle = await syncResearcher(orcid);
       setResearcher(bundle.researcher);
@@ -132,6 +171,7 @@ export function DashboardPage() {
       const { newRecords, updatedRecords, totalRecords } = bundle;
       const hasChanges = newRecords > 0 || updatedRecords > 0;
       toast.success("Sincronización completada", {
+        id: SYNC_TOAST_ID,
         description: hasChanges
           ? `${newRecords} nuevas · ${updatedRecords} actualizadas (${totalRecords} total).`
           : "Sin cambios desde la última sincronización.",
@@ -140,8 +180,12 @@ export function DashboardPage() {
     } catch (err) {
       setSyncStatus("idle");
       toast.error("Error al sincronizar con ORCID", {
+        id: SYNC_TOAST_ID,
         description: err?.message ?? "Inténtalo de nuevo más tarde.",
       });
+    } finally {
+      syncInFlightRef.current = false;
+      startSyncCooldown();
     }
   }
 
@@ -227,6 +271,7 @@ export function DashboardPage() {
                   <SyncButton
                     onClick={handleSync}
                     status={syncStatus}
+                    disabled={syncDisabled}
                     className="w-full sm:w-auto"
                   />
                   <ExportDropdown
