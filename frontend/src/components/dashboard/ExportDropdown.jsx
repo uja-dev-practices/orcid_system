@@ -16,6 +16,7 @@ import {
 export function ExportDropdown({
   onExport,
   exportingFormat = null,
+  disabled = false,
   selectedCount = 0,
   isAuthenticated = false,
   newPublicationsCount = 0,
@@ -61,7 +62,7 @@ export function ExportDropdown({
       <button
         type="button"
         onClick={handleDownload}
-        disabled={isBusy || nothingToDownload}
+        disabled={disabled || isBusy || nothingToDownload}
         className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-surface-border-strong bg-surface-primary px-[18px] py-2.5 text-sm font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
       >
         {isBusy ? (

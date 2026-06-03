@@ -23,6 +23,12 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 
 const SUCCESS_FLASH_MS = 3000;
+/** Minimum gap between sync requests (protects backend + avoids toast spam). */
+const SYNC_COOLDOWN_MS = 5000;
+const SYNC_TOAST_ID = "researcher-sync";
+/** Minimum gap between export requests (protects backend + avoids toast spam). */
+const EXPORT_COOLDOWN_MS = 5000;
+const EXPORT_TOAST_ID = "researcher-export";
 
 /**
  * Researcher detail page. Owns:
@@ -52,7 +58,15 @@ export function DashboardPage() {
   const [pubsError, setPubsError] = useState(null);
 
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | success
+  const [syncCooldownActive, setSyncCooldownActive] = useState(false);
+  const syncInFlightRef = useRef(false);
+  const syncCooldownUntilRef = useRef(0);
+  const syncCooldownTimerRef = useRef(null);
   const [exportingFormat, setExportingFormat] = useState(null);
+  const [exportCooldownActive, setExportCooldownActive] = useState(false);
+  const exportInFlightRef = useRef(false);
+  const exportCooldownUntilRef = useRef(0);
+  const exportCooldownTimerRef = useRef(null);
   const [exportDestination, setExportDestination] = useState(
     DEFAULT_EXPORT_DESTINATION,
   );
@@ -110,12 +124,60 @@ export function DashboardPage() {
     return () => ctrl.abort();
   }, [orcid, loadBundle]);
 
+  useEffect(() => {
+    return () => {
+      if (syncCooldownTimerRef.current) {
+        clearTimeout(syncCooldownTimerRef.current);
+      }
+      if (exportCooldownTimerRef.current) {
+        clearTimeout(exportCooldownTimerRef.current);
+      }
+    };
+  }, []);
+
+  const syncDisabled = syncStatus !== "idle" || syncCooldownActive;
+  const exportDisabled = Boolean(exportingFormat) || exportCooldownActive;
+
+  function startSyncCooldown() {
+    syncCooldownUntilRef.current = Date.now() + SYNC_COOLDOWN_MS;
+    setSyncCooldownActive(true);
+    if (syncCooldownTimerRef.current) {
+      clearTimeout(syncCooldownTimerRef.current);
+    }
+    syncCooldownTimerRef.current = setTimeout(() => {
+      setSyncCooldownActive(false);
+      syncCooldownTimerRef.current = null;
+    }, SYNC_COOLDOWN_MS);
+  }
+
+  function startExportCooldown() {
+    exportCooldownUntilRef.current = Date.now() + EXPORT_COOLDOWN_MS;
+    setExportCooldownActive(true);
+    if (exportCooldownTimerRef.current) {
+      clearTimeout(exportCooldownTimerRef.current);
+    }
+    exportCooldownTimerRef.current = setTimeout(() => {
+      setExportCooldownActive(false);
+      exportCooldownTimerRef.current = null;
+    }, EXPORT_COOLDOWN_MS);
+  }
+
   if (!isValidOrcid(orcid)) {
     return <Navigate to="/" replace />;
   }
 
   async function handleSync() {
+    if (
+      syncInFlightRef.current ||
+      syncStatus !== "idle" ||
+      Date.now() < syncCooldownUntilRef.current
+    ) {
+      return;
+    }
+
+    syncInFlightRef.current = true;
     setSyncStatus("loading");
+
     try {
       const bundle = await syncResearcher(orcid);
       setResearcher(bundle.researcher);
@@ -132,6 +194,7 @@ export function DashboardPage() {
       const { newRecords, updatedRecords, totalRecords } = bundle;
       const hasChanges = newRecords > 0 || updatedRecords > 0;
       toast.success("Sincronización completada", {
+        id: SYNC_TOAST_ID,
         description: hasChanges
           ? `${newRecords} nuevas · ${updatedRecords} actualizadas (${totalRecords} total).`
           : "Sin cambios desde la última sincronización.",
@@ -140,12 +203,25 @@ export function DashboardPage() {
     } catch (err) {
       setSyncStatus("idle");
       toast.error("Error al sincronizar con ORCID", {
+        id: SYNC_TOAST_ID,
         description: err?.message ?? "Inténtalo de nuevo más tarde.",
       });
+    } finally {
+      syncInFlightRef.current = false;
+      startSyncCooldown();
     }
   }
 
   async function handleExport(format, profile = DEFAULT_EXPORT_DESTINATION) {
+    if (
+      exportInFlightRef.current ||
+      exportingFormat ||
+      Date.now() < exportCooldownUntilRef.current
+    ) {
+      return;
+    }
+
+    exportInFlightRef.current = true;
     setExportingFormat(format);
     try {
       let ids;
@@ -157,9 +233,9 @@ export function DashboardPage() {
         ids = newPublicationIds;
         if (ids.length === 0) {
           toast.info("No hay publicaciones nuevas", {
+            id: EXPORT_TOAST_ID,
             description: "Ya has descargado todas las publicaciones de este investigador.",
           });
-          setExportingFormat(null);
           return;
         }
       } else {
@@ -195,14 +271,18 @@ export function DashboardPage() {
         scope = "todo el investigador";
       }
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
+        id: EXPORT_TOAST_ID,
         description: scope,
       });
     } catch (err) {
       toast.error(`Error al exportar ${format.toUpperCase()}`, {
+        id: EXPORT_TOAST_ID,
         description: err?.message ?? "No se pudo generar el fichero.",
       });
     } finally {
       setExportingFormat(null);
+      exportInFlightRef.current = false;
+      startExportCooldown();
     }
   }
 
@@ -227,11 +307,13 @@ export function DashboardPage() {
                   <SyncButton
                     onClick={handleSync}
                     status={syncStatus}
+                    disabled={syncDisabled}
                     className="w-full sm:w-auto"
                   />
                   <ExportDropdown
                     onExport={handleExport}
                     exportingFormat={exportingFormat}
+                    disabled={exportDisabled}
                     selectedCount={selectedIds.size}
                     isAuthenticated={isAuthenticated}
                     newPublicationsCount={newPublicationIds.length}

@@ -17,11 +17,14 @@ import { downloadExport, searchResearchersBulk } from "../services/api";
 import {
   DEFAULT_EXPORT_DESTINATION,
   DEFAULT_EXPORT_PROFILE,
-  EXPORT_ZIP_DESTINATION,
+  resolveExportFromDestination,
   swordXmlFilename,
 } from "../utils/exportProfiles";
 import { ExportDropdown } from "../components/dashboard/ExportDropdown";
 import { useAuth } from "../contexts/AuthContext";
+
+const EXPORT_COOLDOWN_MS = 5000;
+const GLOBAL_EXPORT_TOAST_ID = "group-export-global";
 
 /**
  * Group results view: shows one summary card per researcher, plus a global
@@ -44,10 +47,22 @@ export function GroupResultsPage() {
   const [globalExportDestination, setGlobalExportDestination] = useState(
     DEFAULT_EXPORT_DESTINATION,
   );
-  const [swordProfile, setSwordProfile] = useState(DEFAULT_EXPORT_PROFILE);
 
   // Track per-researcher export state (format | null)
   const [cardExporting, setCardExporting] = useState({});
+
+  const [globalExportCooldownActive, setGlobalExportCooldownActive] =
+    useState(false);
+  const globalExportInFlightRef = useRef(false);
+  const globalExportCooldownUntilRef = useRef(0);
+  const globalExportCooldownTimerRef = useRef(null);
+
+  const [cardExportCooldownActive, setCardExportCooldownActive] = useState(
+    {},
+  );
+  const cardExportInFlightRef = useRef(new Set());
+  const cardExportCooldownUntilRef = useRef({});
+  const cardExportCooldownTimerRef = useRef({});
 
   const abortRef = useRef(null);
 
@@ -95,6 +110,54 @@ export function GroupResultsPage() {
     return () => ctrl.abort();
   }, [orcidIds, navigate]);
 
+  useEffect(() => {
+    const cardTimersObj = cardExportCooldownTimerRef.current;
+    return () => {
+      const globalTimer = globalExportCooldownTimerRef.current;
+      if (globalTimer) {
+        clearTimeout(globalTimer);
+      }
+      for (const t of Object.values(cardTimersObj)) {
+        clearTimeout(t);
+      }
+    };
+  }, []);
+
+  function startGlobalExportCooldown() {
+    globalExportCooldownUntilRef.current = Date.now() + EXPORT_COOLDOWN_MS;
+    setGlobalExportCooldownActive(true);
+
+    if (globalExportCooldownTimerRef.current) {
+      clearTimeout(globalExportCooldownTimerRef.current);
+    }
+    globalExportCooldownTimerRef.current = setTimeout(() => {
+      setGlobalExportCooldownActive(false);
+      globalExportCooldownUntilRef.current = 0;
+      globalExportCooldownTimerRef.current = null;
+    }, EXPORT_COOLDOWN_MS);
+  }
+
+  function startCardExportCooldown(orcidId) {
+    const until = Date.now() + EXPORT_COOLDOWN_MS;
+    cardExportCooldownUntilRef.current[orcidId] = until;
+    setCardExportCooldownActive((prev) => ({
+      ...prev,
+      [orcidId]: true,
+    }));
+
+    if (cardExportCooldownTimerRef.current[orcidId]) {
+      clearTimeout(cardExportCooldownTimerRef.current[orcidId]);
+    }
+    cardExportCooldownTimerRef.current[orcidId] = setTimeout(() => {
+      setCardExportCooldownActive((prev) => ({
+        ...prev,
+        [orcidId]: false,
+      }));
+      cardExportCooldownUntilRef.current[orcidId] = 0;
+      cardExportCooldownTimerRef.current[orcidId] = null;
+    }, EXPORT_COOLDOWN_MS);
+  }
+
   // All new publication IDs across all loaded researchers
   const allNewIds = useMemo(() => {
     if (!isAuthenticated) return [];
@@ -110,25 +173,30 @@ export function GroupResultsPage() {
     [results],
   );
 
-  function handleGlobalExportDestinationChange(nextDestination) {
-    setGlobalExportDestination(nextDestination);
-    // Keep last XML profile for card-level exports.
-    if (nextDestination !== EXPORT_ZIP_DESTINATION) {
-      setSwordProfile(nextDestination);
-    }
-  }
-
   async function handleGlobalExport(format, profile = DEFAULT_EXPORT_PROFILE) {
+    if (
+      globalExportInFlightRef.current ||
+      Date.now() < globalExportCooldownUntilRef.current
+    ) {
+      return;
+    }
+
     const ids = isAuthenticated ? allNewIds : allIds;
     if (ids.length === 0) {
       toast.info(
         isAuthenticated
           ? "No hay publicaciones nuevas"
           : "No hay publicaciones para exportar",
-        { description: "No se encontraron publicaciones en los investigadores cargados." },
+        {
+          id: GLOBAL_EXPORT_TOAST_ID,
+          description:
+            "No se encontraron publicaciones en los investigadores cargados.",
+        },
       );
       return;
     }
+
+    globalExportInFlightRef.current = true;
     setGlobalExporting(format);
     try {
       // For bulk export we send all IDs together, passing a placeholder orcid
@@ -151,14 +219,18 @@ export function GroupResultsPage() {
         URL.revokeObjectURL(objectUrl);
       }
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
+        id: GLOBAL_EXPORT_TOAST_ID,
         description: `${ids.length} publicaciones exportadas.`,
       });
     } catch (err) {
       toast.error(`Error al exportar ${format.toUpperCase()}`, {
+        id: GLOBAL_EXPORT_TOAST_ID,
         description: err?.message ?? "No se pudo generar el fichero.",
       });
     } finally {
       setGlobalExporting(null);
+      globalExportInFlightRef.current = false;
+      startGlobalExportCooldown();
     }
   }
 
@@ -169,11 +241,22 @@ export function GroupResultsPage() {
     totalIds,
     profile = DEFAULT_EXPORT_PROFILE,
   ) {
-    const ids = isAuthenticated ? newIds : totalIds;
-    if (ids.length === 0) {
-      toast.info("No hay publicaciones para exportar");
+    if (cardExportInFlightRef.current.has(orcidId)) {
       return;
     }
+    const now = Date.now();
+    const until = cardExportCooldownUntilRef.current[orcidId] ?? 0;
+    if (now < until) return;
+
+    const ids = isAuthenticated ? newIds : totalIds;
+    if (ids.length === 0) {
+      toast.info("No hay publicaciones para exportar", {
+        id: `group-export-card-${orcidId}`,
+      });
+      return;
+    }
+
+    cardExportInFlightRef.current.add(orcidId);
     setCardExporting((prev) => ({ ...prev, [orcidId]: format }));
     try {
       const { blob } = await downloadExport(orcidId, format, {
@@ -194,10 +277,12 @@ export function GroupResultsPage() {
         URL.revokeObjectURL(objectUrl);
       }
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
+        id: `group-export-card-${orcidId}`,
         description: `${ids.length} publicaciones de ${orcidId}.`,
       });
     } catch (err) {
       toast.error(`Error al exportar ${format.toUpperCase()}`, {
+        id: `group-export-card-${orcidId}`,
         description: err?.message ?? "No se pudo generar el fichero.",
       });
     } finally {
@@ -206,6 +291,8 @@ export function GroupResultsPage() {
         delete next[orcidId];
         return next;
       });
+      cardExportInFlightRef.current.delete(orcidId);
+      startCardExportCooldown(orcidId);
     }
   }
 
@@ -250,11 +337,14 @@ export function GroupResultsPage() {
               <ExportDropdown
                 onExport={handleGlobalExport}
                 exportingFormat={globalExporting}
+                disabled={
+                  Boolean(globalExporting) || globalExportCooldownActive
+                }
                 selectedCount={0}
                 isAuthenticated={isAuthenticated}
                 newPublicationsCount={allNewIds.length}
                 exportDestination={globalExportDestination}
-                onExportDestinationChange={handleGlobalExportDestinationChange}
+                onExportDestinationChange={setGlobalExportDestination}
               />
             )}
           </div>
@@ -281,15 +371,22 @@ export function GroupResultsPage() {
                   bundle={bundle}
                   isAuthenticated={isAuthenticated}
                   exporting={cardExporting[bundle.researcher?.orcid_id] ?? null}
-                  onExport={(fmt, newIds, totalIds) =>
+                  exportCooldownActive={
+                    cardExportCooldownActive[bundle.researcher?.orcid_id] ??
+                    false
+                  }
+                  onExport={(newIds, totalIds) => {
+                    const { format, profile } = resolveExportFromDestination(
+                      globalExportDestination,
+                    );
                     handleCardExport(
                       bundle.researcher?.orcid_id,
-                      fmt,
+                      format,
                       newIds,
                       totalIds,
-                      swordProfile,
-                    )
-                  }
+                      profile ?? DEFAULT_EXPORT_PROFILE,
+                    );
+                  }}
                 />
               ))}
             </div>
@@ -349,6 +446,7 @@ function ResearcherResultCard({
   bundle,
   isAuthenticated,
   exporting,
+  exportCooldownActive,
   onExport,
 }) {
   const researcher = bundle.researcher ?? {};
@@ -419,92 +517,64 @@ function ResearcherResultCard({
         >
           Ver detalle
         </Link>
-        <ExportFormatMenu
-          onExport={(fmt) => onExport(fmt, newIds, allPubIds)}
+        <CardExportButton
+          onClick={() => onExport(newIds, allPubIds)}
           exporting={exporting}
           isAuthenticated={isAuthenticated}
           hasNew={hasNew}
           newCount={newCount}
           totalCount={totalRecords}
+          exportCooldownActive={exportCooldownActive}
         />
       </div>
     </div>
   );
 }
 
-/* ─────────────────────── Inline export format picker ─────────────────── */
+/* ─────────────────────── Per-card download button ────────────────────── */
 
-function ExportFormatMenu({
-  onExport,
+function CardExportButton({
+  onClick,
   exporting,
   isAuthenticated,
   hasNew,
   newCount,
   totalCount,
+  exportCooldownActive,
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
   const isBusy = Boolean(exporting);
   const disabled =
-    isBusy || (isAuthenticated && !hasNew && totalCount > 0 && newCount === 0);
+    isBusy ||
+    exportCooldownActive ||
+    (isAuthenticated && !hasNew && totalCount > 0 && newCount === 0);
 
   let label;
   if (isBusy) {
-    label = `Exportando ${exporting.toUpperCase()}...`;
+    label = `Descargando ${exporting.toUpperCase()}...`;
+  } else if (exportCooldownActive) {
+    label = "Espera un momento...";
   } else if (isAuthenticated) {
-    label = hasNew ? `Nuevo (${newCount})` : "Descargado";
+    label = hasNew ? `Descargar (${newCount})` : "Todo descargado";
   } else {
-    label = `Todo (${totalCount})`;
+    label = `Descargar (${totalCount})`;
   }
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        disabled={disabled}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border-strong bg-surface-primary px-3 py-2 text-[13px] font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isBusy ? (
-          <Spinner size={13} />
-        ) : hasNew ? (
-          <SparkleIcon size={11} className="text-brand-accent" />
-        ) : (
-          <DownloadIcon size={13} />
-        )}
-        {label}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-50 min-w-[160px] overflow-hidden rounded-xl border border-surface-border-strong bg-surface-primary shadow-lg">
-          {["xml", "zip"].map((fmt, idx) => (
-            <button
-              key={fmt}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onExport(fmt);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-medium text-ink-primary transition-colors hover:bg-surface-secondary ${
-                idx === 0 ? "border-b border-surface-border/60" : ""
-              }`}
-            >
-              <DownloadIcon size={13} />
-              {fmt.toUpperCase()}
-            </button>
-          ))}
-        </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-surface-border-strong bg-surface-primary px-3 py-2 text-[13px] font-medium text-ink-primary transition-colors enabled:hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+    >
+      {isBusy ? (
+        <Spinner size={13} />
+      ) : hasNew ? (
+        <SparkleIcon size={11} className="text-brand-accent" />
+      ) : (
+        <DownloadIcon size={13} />
       )}
-    </div>
+      {label}
+    </button>
   );
 }
 
