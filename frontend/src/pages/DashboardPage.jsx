@@ -245,15 +245,9 @@ export function DashboardPage() {
         // Manual selection takes priority
         ids = Array.from(selectedIds);
       } else if (isAuthenticated) {
-        // Authenticated → only download publications not yet downloaded by me
-        ids = newPublicationIds;
-        if (ids.length === 0) {
-          toast.info("No hay publicaciones nuevas", {
-            id: EXPORT_TOAST_ID,
-            description: "Ya has descargado todas las publicaciones de este investigador.",
-          });
-          return;
-        }
+        // Prefer undownloaded; if none left, allow re-downloading the full profile
+        ids =
+          newPublicationIds.length > 0 ? newPublicationIds : undefined;
       } else {
         // Anonymous → download everything
         ids = undefined;
@@ -282,12 +276,19 @@ export function DashboardPage() {
       if (selectedIds.size > 0) {
         scope = `${selectedIds.size} publicación${selectedIds.size === 1 ? "" : "es"} seleccionada${selectedIds.size === 1 ? "" : "s"}`;
       } else if (isAuthenticated) {
-        scope = `${newPublicationIds.length} publicación${newPublicationIds.length === 1 ? "" : "es"} nueva${newPublicationIds.length === 1 ? "" : "s"}`;
+        scope =
+          newPublicationIds.length > 0
+            ? `${newPublicationIds.length} publicación${newPublicationIds.length === 1 ? "" : "es"} nueva${newPublicationIds.length === 1 ? "" : "s"}`
+            : "todo el investigador";
       } else {
         scope = "todo el investigador";
       }
-      if (isAuthenticated && ids?.length) {
-        setPublications((prev) => markPublicationsAsDownloaded(prev, ids));
+      if (isAuthenticated) {
+        const downloadedIds =
+          ids?.length > 0 ? ids : publications.map((p) => p.id);
+        setPublications((prev) =>
+          markPublicationsAsDownloaded(prev, downloadedIds),
+        );
       }
 
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
