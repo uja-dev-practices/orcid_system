@@ -444,7 +444,7 @@ export function PublicationsTable({
                                     className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-accent"
                                   >
                                     <SparkleIcon size={9} />
-                                    Nuevo
+                                    NUEVO
                                   </span>
                                 )}
                                 <p className="text-[14px] font-medium leading-relaxed text-ink-primary">
@@ -570,7 +570,7 @@ export function PublicationsTable({
                                 className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-accent"
                               >
                                 <SparkleIcon size={9} />
-                                Nuevo
+                                NUEVO
                               </span>
                             )}
                             {pub.title}

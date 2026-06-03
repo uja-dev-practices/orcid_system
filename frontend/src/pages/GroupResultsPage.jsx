@@ -22,6 +22,7 @@ import {
 } from "../utils/exportProfiles";
 import { ExportDropdown } from "../components/dashboard/ExportDropdown";
 import { useAuth } from "../contexts/AuthContext";
+import { markGroupResultsAsDownloaded } from "../utils/downloadTracking";
 
 const EXPORT_COOLDOWN_MS = 5000;
 const GLOBAL_EXPORT_TOAST_ID = "group-export-global";
@@ -108,7 +109,7 @@ export function GroupResultsPage() {
     })();
 
     return () => ctrl.abort();
-  }, [orcidIds, navigate]);
+  }, [orcidIds, navigate, isAuthenticated]);
 
   useEffect(() => {
     const cardTimersObj = cardExportCooldownTimerRef.current;
@@ -218,6 +219,10 @@ export function GroupResultsPage() {
         anchor.remove();
         URL.revokeObjectURL(objectUrl);
       }
+      if (isAuthenticated) {
+        setResults((prev) => markGroupResultsAsDownloaded(prev, ids));
+      }
+
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
         id: GLOBAL_EXPORT_TOAST_ID,
         description: `${ids.length} publicaciones exportadas.`,
@@ -276,6 +281,10 @@ export function GroupResultsPage() {
         anchor.remove();
         URL.revokeObjectURL(objectUrl);
       }
+      if (isAuthenticated) {
+        setResults((prev) => markGroupResultsAsDownloaded(prev, ids));
+      }
+
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
         id: `group-export-card-${orcidId}`,
         description: `${ids.length} publicaciones de ${orcidId}.`,

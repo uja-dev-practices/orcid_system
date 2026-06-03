@@ -21,6 +21,10 @@ import {
   swordXmlFilename,
 } from "../utils/exportProfiles";
 import { useAuth } from "../contexts/AuthContext";
+import {
+  markPublicationsAsDownloaded,
+  publicationsNeedDownloadFlags,
+} from "../utils/downloadTracking";
 
 const SUCCESS_FLASH_MS = 3000;
 /** Minimum gap between sync requests (protects backend + avoids toast spam). */
@@ -48,6 +52,7 @@ export function DashboardPage() {
   const { isAuthenticated } = useAuth();
 
   const initialBundleRef = useRef(location.state?.bundle ?? null);
+  const consumedInitialBundleRef = useRef(false);
 
   const initialBundle = initialBundleRef.current;
   const [researcher, setResearcher] = useState(initialBundle?.researcher ?? null);
@@ -115,14 +120,25 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!isValidOrcid(orcid)) return;
-    if (initialBundleRef.current) {
+
+    const cachedBundle = initialBundleRef.current;
+    if (cachedBundle && !consumedInitialBundleRef.current) {
+      consumedInitialBundleRef.current = true;
       initialBundleRef.current = null;
-      return;
+      if (
+        !publicationsNeedDownloadFlags(
+          cachedBundle.publications,
+          isAuthenticated,
+        )
+      ) {
+        return;
+      }
     }
+
     const ctrl = new AbortController();
     loadBundle(ctrl.signal);
     return () => ctrl.abort();
-  }, [orcid, loadBundle]);
+  }, [orcid, loadBundle, isAuthenticated]);
 
   useEffect(() => {
     return () => {
@@ -270,6 +286,10 @@ export function DashboardPage() {
       } else {
         scope = "todo el investigador";
       }
+      if (isAuthenticated && ids?.length) {
+        setPublications((prev) => markPublicationsAsDownloaded(prev, ids));
+      }
+
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
         id: EXPORT_TOAST_ID,
         description: scope,

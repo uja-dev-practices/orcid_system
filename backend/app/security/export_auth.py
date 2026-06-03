@@ -18,16 +18,22 @@ def require_export_access(
     api_key: str | None = Depends(api_key_header),
     current: Researcher | None = Depends(get_optional_current_researcher),
 ) -> Researcher | None:
-    if api_key is not None:
-        if not is_valid_api_key(api_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API key",
-            )
-        return current
+    """
+  Allow export when the proxy supplies a valid API key and/or the user
+  sends a valid Bearer token. Prefer returning `current` when both are
+  present so per-user download tracking is recorded on export.
+    """
+    if api_key is not None and not is_valid_api_key(api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
 
     if current is not None:
         return current
+
+    if api_key is not None:
+        return None
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

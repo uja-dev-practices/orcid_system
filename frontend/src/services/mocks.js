@@ -29,6 +29,7 @@ export const MOCK_PUBLICATIONS = [
     doi: "10.1038/s41567-025-xxxx",
     type: "journal-article",
     last_modified: "2025-09-01T10:00:00Z",
+    downloaded_by_me: false,
   },
   {
     id: "uuid-2",
@@ -40,6 +41,7 @@ export const MOCK_PUBLICATIONS = [
     doi: "10.1000/jdr.2024.12",
     type: "review",
     last_modified: "2024-11-12T09:00:00Z",
+    downloaded_by_me: false,
   },
   {
     id: "uuid-3",
@@ -50,6 +52,7 @@ export const MOCK_PUBLICATIONS = [
     doi: "10.1007/s11192-024-04801-z",
     type: "journal-article",
     last_modified: "2024-06-20T15:30:00Z",
+    downloaded_by_me: true,
   },
   {
     id: "uuid-4",
@@ -60,6 +63,7 @@ export const MOCK_PUBLICATIONS = [
     doi: "10.1145/3587-dl.2023.09",
     type: "conference-paper",
     last_modified: "2023-10-05T11:45:00Z",
+    downloaded_by_me: false,
   },
   {
     id: "uuid-5",
@@ -70,6 +74,7 @@ export const MOCK_PUBLICATIONS = [
     doi: "10.1016/j.ijls.2023.03.011",
     type: "journal-article",
     last_modified: "2023-04-18T08:15:00Z",
+    downloaded_by_me: true,
   },
 ];
 
