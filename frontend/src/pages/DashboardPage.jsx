@@ -26,6 +26,9 @@ const SUCCESS_FLASH_MS = 3000;
 /** Minimum gap between sync requests (protects backend + avoids toast spam). */
 const SYNC_COOLDOWN_MS = 5000;
 const SYNC_TOAST_ID = "researcher-sync";
+/** Minimum gap between export requests (protects backend + avoids toast spam). */
+const EXPORT_COOLDOWN_MS = 5000;
+const EXPORT_TOAST_ID = "researcher-export";
 
 /**
  * Researcher detail page. Owns:
@@ -60,6 +63,10 @@ export function DashboardPage() {
   const syncCooldownUntilRef = useRef(0);
   const syncCooldownTimerRef = useRef(null);
   const [exportingFormat, setExportingFormat] = useState(null);
+  const [exportCooldownActive, setExportCooldownActive] = useState(false);
+  const exportInFlightRef = useRef(false);
+  const exportCooldownUntilRef = useRef(0);
+  const exportCooldownTimerRef = useRef(null);
   const [exportDestination, setExportDestination] = useState(
     DEFAULT_EXPORT_DESTINATION,
   );
@@ -122,10 +129,14 @@ export function DashboardPage() {
       if (syncCooldownTimerRef.current) {
         clearTimeout(syncCooldownTimerRef.current);
       }
+      if (exportCooldownTimerRef.current) {
+        clearTimeout(exportCooldownTimerRef.current);
+      }
     };
   }, []);
 
   const syncDisabled = syncStatus !== "idle" || syncCooldownActive;
+  const exportDisabled = Boolean(exportingFormat) || exportCooldownActive;
 
   function startSyncCooldown() {
     syncCooldownUntilRef.current = Date.now() + SYNC_COOLDOWN_MS;
@@ -137,6 +148,18 @@ export function DashboardPage() {
       setSyncCooldownActive(false);
       syncCooldownTimerRef.current = null;
     }, SYNC_COOLDOWN_MS);
+  }
+
+  function startExportCooldown() {
+    exportCooldownUntilRef.current = Date.now() + EXPORT_COOLDOWN_MS;
+    setExportCooldownActive(true);
+    if (exportCooldownTimerRef.current) {
+      clearTimeout(exportCooldownTimerRef.current);
+    }
+    exportCooldownTimerRef.current = setTimeout(() => {
+      setExportCooldownActive(false);
+      exportCooldownTimerRef.current = null;
+    }, EXPORT_COOLDOWN_MS);
   }
 
   if (!isValidOrcid(orcid)) {
@@ -190,6 +213,15 @@ export function DashboardPage() {
   }
 
   async function handleExport(format, profile = DEFAULT_EXPORT_DESTINATION) {
+    if (
+      exportInFlightRef.current ||
+      exportingFormat ||
+      Date.now() < exportCooldownUntilRef.current
+    ) {
+      return;
+    }
+
+    exportInFlightRef.current = true;
     setExportingFormat(format);
     try {
       let ids;
@@ -201,9 +233,9 @@ export function DashboardPage() {
         ids = newPublicationIds;
         if (ids.length === 0) {
           toast.info("No hay publicaciones nuevas", {
+            id: EXPORT_TOAST_ID,
             description: "Ya has descargado todas las publicaciones de este investigador.",
           });
-          setExportingFormat(null);
           return;
         }
       } else {
@@ -239,14 +271,18 @@ export function DashboardPage() {
         scope = "todo el investigador";
       }
       toast.success(`Exportación ${format.toUpperCase()} completada`, {
+        id: EXPORT_TOAST_ID,
         description: scope,
       });
     } catch (err) {
       toast.error(`Error al exportar ${format.toUpperCase()}`, {
+        id: EXPORT_TOAST_ID,
         description: err?.message ?? "No se pudo generar el fichero.",
       });
     } finally {
       setExportingFormat(null);
+      exportInFlightRef.current = false;
+      startExportCooldown();
     }
   }
 
@@ -277,6 +313,7 @@ export function DashboardPage() {
                   <ExportDropdown
                     onExport={handleExport}
                     exportingFormat={exportingFormat}
+                    disabled={exportDisabled}
                     selectedCount={selectedIds.size}
                     isAuthenticated={isAuthenticated}
                     newPublicationsCount={newPublicationIds.length}
