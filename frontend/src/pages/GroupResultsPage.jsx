@@ -182,18 +182,14 @@ export function GroupResultsPage() {
       return;
     }
 
-    const ids = isAuthenticated ? allNewIds : allIds;
+    const ids =
+      isAuthenticated && allNewIds.length > 0 ? allNewIds : allIds;
     if (ids.length === 0) {
-      toast.info(
-        isAuthenticated
-          ? "No hay publicaciones nuevas"
-          : "No hay publicaciones para exportar",
-        {
-          id: GLOBAL_EXPORT_TOAST_ID,
-          description:
-            "No se encontraron publicaciones en los investigadores cargados.",
-        },
-      );
+      toast.info("No hay publicaciones para exportar", {
+        id: GLOBAL_EXPORT_TOAST_ID,
+        description:
+          "No se encontraron publicaciones en los investigadores cargados.",
+      });
       return;
     }
 
@@ -253,7 +249,8 @@ export function GroupResultsPage() {
     const until = cardExportCooldownUntilRef.current[orcidId] ?? 0;
     if (now < until) return;
 
-    const ids = isAuthenticated ? newIds : totalIds;
+    const ids =
+      isAuthenticated && newIds.length > 0 ? newIds : totalIds;
     if (ids.length === 0) {
       toast.info("No hay publicaciones para exportar", {
         id: `group-export-card-${orcidId}`,
@@ -552,10 +549,7 @@ function CardExportButton({
   exportCooldownActive,
 }) {
   const isBusy = Boolean(exporting);
-  const disabled =
-    isBusy ||
-    exportCooldownActive ||
-    (isAuthenticated && !hasNew && totalCount > 0 && newCount === 0);
+  const disabled = isBusy || exportCooldownActive;
 
   let label;
   if (isBusy) {
