@@ -34,6 +34,9 @@ Core capabilities:
 > [!NOTE]
 > The stack is local-first with Docker, but includes production-oriented hardening (CORS policy, trusted hosts, security headers, rate limiting, etc.).
 
+<img width="1343" height="862" alt="image" src="https://github.com/user-attachments/assets/7e788d71-54b8-47fa-9586-e0e7ba575b92" />
+
+
 ---
 
 ## ![certificate](https://www.readmecodegen.com/api/social-icon?name=certificate&size=20). Tech Stack
