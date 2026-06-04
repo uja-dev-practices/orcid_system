@@ -44,6 +44,9 @@ docker-data/
 postgres_data/
 redis_data/
 
+# --- CI / DEPLOY ---
+.gitlab-ci.yml
+
 # --- ENVIRONMENT VARIABLES ---
 # Secret files shouldn't be committed
 .env
